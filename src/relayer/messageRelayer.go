@@ -18,6 +18,7 @@ type DefaultMessageRelayer struct {
 	errorCh     chan error
 	closed      bool
 	mu          sync.RWMutex
+	wg          sync.WaitGroup
 }
 
 func (mr *DefaultMessageRelayer) SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message) {
@@ -42,6 +43,7 @@ func (mr *DefaultMessageRelayer) Listen() {
 			mr.Relay(msg)
 		}
 	}
+	mr.wg.Wait()
 }
 
 func (mr *DefaultMessageRelayer) Close() {
@@ -65,12 +67,14 @@ func (mr *DefaultMessageRelayer) Relay(msg domain.Message) {
 
 	msgType := msg.Type
 	for _, ch := range mr.subscribers[msgType] {
+		mr.wg.Add(1)
 		go func(ch chan<- domain.Message) {
 			select {
 			case ch <- msg:
 			default:
 				fmt.Printf("skipping busy channel\n")
 			}
+			mr.wg.Done()
 		}(ch)
 	}
 }
