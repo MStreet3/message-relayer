@@ -30,8 +30,9 @@ var NetworkErrorResponse = network.NetworkResponse{Message: domain.Message{},
 
 func Test_subscriber_receives_all_messages_of_correct_type(t *testing.T) {
 	/* setup */
-	// sub to start new round messages
-	firstSubCh := make(chan domain.Message)
+	// sub to start new round messages, bufferred because
+	// busy channels get their messages dropped
+	firstSubCh := make(chan domain.Message, 2)
 	gotStartNewRound := 0
 
 	// use stub socket
@@ -47,12 +48,12 @@ func Test_subscriber_receives_all_messages_of_correct_type(t *testing.T) {
 	// subscribe each channel to the relayer
 	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
 
-	go mr.Listen()
+	go mr.ListenAndRelay()
 
 	/* actions */
 	// read each message from the channel and increment the count
 	for msg := range firstSubCh {
-		fmt.Printf("%#v\n", msg)
+		fmt.Printf("received message: %#v\n", msg)
 		gotStartNewRound++
 	}
 

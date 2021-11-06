@@ -13,5 +13,5 @@ func Start() {
 	mr := relayer.NewMessageRelayer(ns)
 	ch := make(chan domain.Message)
 	mr.SubscribeToMessage(domain.ReceivedAnswer, ch)
-	mr.Listen()
+	mr.ListenAndRelay()
 }

@@ -27,7 +27,7 @@ func (mr *DefaultMessageRelayer) SubscribeToMessage(msgType domain.MessageType, 
 	mr.subscribers[msgType] = append(mr.subscribers[msgType], ch)
 }
 
-func (mr *DefaultMessageRelayer) Listen() {
+func (mr *DefaultMessageRelayer) ListenAndRelay() {
 	defer mr.Close()
 	for {
 		if msg, err := mr.network.Read(); err != nil {
