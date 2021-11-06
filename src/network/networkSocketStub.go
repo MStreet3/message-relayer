@@ -1,9 +1,8 @@
 package network
 
 import (
-	"errors"
-
 	"github.com/mstreet3/message-relayer/domain"
+	"github.com/mstreet3/message-relayer/errs"
 )
 
 type NetworkResponse struct {
@@ -22,7 +21,7 @@ func (n *NetworkSocketStub) Read() (domain.Message, error) {
 		n.Cursor++
 		return response.Message, response.Error
 	}
-	return domain.Message{}, errors.New("no more responses left")
+	return domain.Message{}, errs.FatalSocketError{}
 }
 
 func (n *NetworkSocketStub) ResetCursor() {

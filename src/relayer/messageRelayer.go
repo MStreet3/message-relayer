@@ -1,10 +1,12 @@
 package relayer
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/mstreet3/message-relayer/domain"
+	"github.com/mstreet3/message-relayer/errs"
 	"github.com/mstreet3/message-relayer/network"
 )
 
@@ -31,13 +33,17 @@ func (mr *DefaultMessageRelayer) ListenAndRelay() {
 	defer mr.Close()
 	for {
 		if msg, err := mr.network.Read(); err != nil {
-			fmt.Printf("fails while relaying the error %#v\n", err)
+			if errors.Is(err, errs.FatalSocketError{}) {
+				fmt.Printf("%s\n", err.Error())
+				// todo: probably want to cancel all open go routines
+				// by sending on a done channel
+				break
+			}
 			select {
 			case mr.errorCh <- err:
 			default:
 				fmt.Println("no error subscribers")
 			}
-			break // todo: maybe we just continue if there's a network error?
 		} else {
 			fmt.Printf("relaying the message %#v\n", msg)
 			mr.Relay(msg)
