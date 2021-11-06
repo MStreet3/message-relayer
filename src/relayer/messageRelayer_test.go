@@ -29,6 +29,7 @@ var NetworkErrorResponse = network.NetworkResponse{Message: domain.Message{},
 	Error: errors.New("network unavailable"),
 }
 
+// todo: make unit test generator
 func Test_subscriber_receives_all_messages_of_correct_type(t *testing.T) {
 	/* setup */
 	// sub to start new round messages, bufferred because
@@ -173,4 +174,73 @@ func Test_relayer_continues_with_non_fatal_network_errors(t *testing.T) {
 	require.Equal(t, 2, gotStartNewRound)
 	require.Equal(t, 2, gotReceivedAnswer)
 
+}
+
+func Test_multiple_subs_of_same_type_receive_all_messages_of_correct_type(t *testing.T) {
+	/* setup */
+	var wg sync.WaitGroup
+	// sub to start new round messages, bufferred because
+	// busy channels get their messages dropped
+	firstSubCh := make(chan domain.Message, 2)
+	gotStartNewRound := 0
+
+	secondSubCh := make(chan domain.Message, 2)
+	gotReceivedAnswer := 0
+
+	thirdSubCh := make(chan domain.Message, 2)
+	gotStartNewRoundToo := 0
+
+	// use stub socket
+	responses := []network.NetworkResponse{
+		StartNewRoundResponse,
+		ReceivedAnswerResponse,
+		NetworkErrorResponse,
+		NetworkErrorResponse,
+		StartNewRoundResponse,
+		ReceivedAnswerResponse,
+		NetworkErrorResponse,
+	}
+	socket := network.NewNetworkSocketStub(responses)
+
+	mr := NewMessageRelayer(socket)
+
+	// subscribe each channel to the relayer
+	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
+	mr.SubscribeToMessage(domain.ReceivedAnswer, secondSubCh)
+	mr.SubscribeToMessage(domain.StartNewRound, thirdSubCh)
+
+	go mr.ListenAndRelay()
+
+	/* actions */
+	// read each message from the channel and increment the count
+	wg.Add(1)
+	go func() {
+		for range firstSubCh {
+			gotStartNewRound++
+		}
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go func() {
+		for range secondSubCh {
+			gotReceivedAnswer++
+		}
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go func() {
+		for range thirdSubCh {
+			gotStartNewRoundToo++
+		}
+		wg.Done()
+	}()
+
+	// assertions
+	// count of received StartNewRound and ReceivedAnswer messages should be two
+	wg.Wait()
+	require.Equal(t, 2, gotStartNewRound)
+	require.Equal(t, 2, gotStartNewRoundToo)
+	require.Equal(t, 2, gotReceivedAnswer)
 }
