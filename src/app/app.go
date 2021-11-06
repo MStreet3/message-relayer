@@ -10,7 +10,7 @@ func Start() {
 	responses := []network.NetworkResponse{
 		{Message: domain.Message{Type: domain.ReceivedAnswer}}}
 	ns := network.NewNetworkSocketStub(responses)
-	mr := relayer.NewMessageRelayer(ns)
+	mr := relayer.NewDefaultMessageRelayer(ns)
 	ch := make(chan domain.Message)
 	mr.SubscribeToMessage(domain.ReceivedAnswer, ch)
 	mr.ListenAndRelay()

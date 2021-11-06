@@ -45,7 +45,7 @@ func Test_subscriber_receives_all_messages_of_correct_type(t *testing.T) {
 	}
 	socket := network.NewNetworkSocketStub(responses)
 
-	mr := NewMessageRelayer(socket)
+	mr := NewDefaultMessageRelayer(socket)
 
 	// subscribe each channel to the relayer
 	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
@@ -85,7 +85,7 @@ func Test_all_subscribers_receives_all_messages_of_correct_type(t *testing.T) {
 	}
 	socket := network.NewNetworkSocketStub(responses)
 
-	mr := NewMessageRelayer(socket)
+	mr := NewDefaultMessageRelayer(socket)
 
 	// subscribe each channel to the relayer
 	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
@@ -142,7 +142,7 @@ func Test_relayer_continues_with_non_fatal_network_errors(t *testing.T) {
 	}
 	socket := network.NewNetworkSocketStub(responses)
 
-	mr := NewMessageRelayer(socket)
+	mr := NewDefaultMessageRelayer(socket)
 
 	// subscribe each channel to the relayer
 	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
@@ -202,7 +202,7 @@ func Test_multiple_subs_of_same_type_receive_all_messages_of_correct_type(t *tes
 	}
 	socket := network.NewNetworkSocketStub(responses)
 
-	mr := NewMessageRelayer(socket)
+	mr := NewDefaultMessageRelayer(socket)
 
 	// subscribe each channel to the relayer
 	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
