@@ -2,12 +2,12 @@ package relayer
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
 	"github.com/mstreet3/message-relayer/network"
+	"github.com/mstreet3/message-relayer/utils"
 )
 
 type DefaultMessageRelayer struct {
@@ -30,7 +30,7 @@ func (mr DefaultMessageRelayer) ListenAndRelay() {
 	for {
 		if msg, err := mr.network.Read(); err != nil {
 			if errors.Is(err, errs.FatalSocketError{}) {
-				fmt.Printf("%s\n", err.Error())
+				utils.DPrintf("%s\n", err.Error())
 				// todo: probably want to cancel all open go routines
 				// by sending on a done channel
 				break
@@ -38,10 +38,10 @@ func (mr DefaultMessageRelayer) ListenAndRelay() {
 			select {
 			case mr.errorCh <- err:
 			default:
-				fmt.Println("no error subscribers")
+				utils.DPrintf("no error subscribers")
 			}
 		} else {
-			fmt.Printf("relaying the message %#v\n", msg)
+			utils.DPrintf("relaying the message %#v\n", msg)
 			mr.Relay(msg)
 		}
 	}
@@ -74,7 +74,7 @@ func (mr *DefaultMessageRelayer) Relay(msg domain.Message) {
 			select {
 			case ch <- msg:
 			default:
-				fmt.Printf("skipping busy channel\n")
+				utils.DPrintf("skipping busy channel\n")
 			}
 			mr.wg.Done()
 		}(ch)

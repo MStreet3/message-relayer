@@ -8,6 +8,7 @@ import (
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/network"
+	"github.com/mstreet3/message-relayer/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -73,7 +74,7 @@ func Test_single_subscriber(t *testing.T) {
 			/* actions */
 			// read each message from the channel and increment the count
 			for msg := range firstSubCh {
-				fmt.Printf("received message: %#v\n", msg)
+				utils.DPrintf("received message: %#v\n", msg)
 				gotStartNewRound++
 			}
 
