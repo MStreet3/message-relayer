@@ -2,6 +2,7 @@ package relayer
 
 import (
 	"github.com/mstreet3/message-relayer/domain"
+	"github.com/mstreet3/message-relayer/network"
 )
 
 type MessageRelayer interface {
@@ -12,3 +13,5 @@ type MessageRelayerServer interface {
 	MessageRelayer
 	ListenAndRelay()
 }
+
+type MakeMessageRelayerServer = func(network.NetworkSocket) MessageRelayerServer

@@ -29,39 +29,63 @@ var NetworkErrorResponse = network.NetworkResponse{Message: domain.Message{},
 	Error: errors.New("network unavailable"),
 }
 
-// todo: make unit test generator
-func Test_subscriber_receives_all_messages_of_correct_type(t *testing.T) {
-	/* setup */
-	// sub to start new round messages, bufferred because
-	// busy channels get their messages dropped
-	firstSubCh := make(chan domain.Message, 2)
-	gotStartNewRound := 0
+type MessageRelayerServerTestCase struct {
+	Name  string
+	Maker MakeMessageRelayerServer
+}
 
-	// use stub socket
-	responses := []network.NetworkResponse{
-		StartNewRoundResponse,
-		StartNewRoundResponse,
-		ReceivedAnswerResponse,
-	}
-	socket := network.NewNetworkSocketStub(responses)
+func Test_single_subscriber(t *testing.T) {
 
-	mr := NewDefaultMessageRelayer(socket)
-
-	// subscribe each channel to the relayer
-	mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
-
-	go mr.ListenAndRelay()
-
-	/* actions */
-	// read each message from the channel and increment the count
-	for msg := range firstSubCh {
-		fmt.Printf("received message: %#v\n", msg)
-		gotStartNewRound++
+	makeTestCaseName := func(n string) string {
+		return fmt.Sprintf("%ssubscriber receives all messages of correct type", n)
 	}
 
-	// assertions
-	// count of received StartNewRound messages should be two
-	require.Equal(t, 2, gotStartNewRound)
+	testCases := []MessageRelayerServerTestCase{
+		{
+			Name:  "DefaultMessageRelayer:",
+			Maker: NewDefaultMessageRelayer,
+		},
+	}
+
+	makeTestCase := func(m MakeMessageRelayerServer) func(t *testing.T) {
+		return func(t *testing.T) {
+			/* setup */
+			// sub to start new round messages, bufferred because
+			// busy channels get their messages dropped
+			firstSubCh := make(chan domain.Message, 2)
+			gotStartNewRound := 0
+
+			// use stub socket
+			responses := []network.NetworkResponse{
+				StartNewRoundResponse,
+				StartNewRoundResponse,
+				ReceivedAnswerResponse,
+			}
+			socket := network.NewNetworkSocketStub(responses)
+
+			mr := m(socket)
+
+			// subscribe each channel to the relayer
+			mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
+
+			go mr.ListenAndRelay()
+
+			/* actions */
+			// read each message from the channel and increment the count
+			for msg := range firstSubCh {
+				fmt.Printf("received message: %#v\n", msg)
+				gotStartNewRound++
+			}
+
+			// assertions
+			// count of received StartNewRound messages should be two
+			require.Equal(t, 2, gotStartNewRound)
+		}
+	}
+
+	for _, tc := range testCases {
+		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker))
+	}
 
 }
 
