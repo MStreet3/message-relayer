@@ -25,20 +25,20 @@ func (mr DefaultMessageRelayer) SubscribeToMessage(msgType domain.MessageType, c
 	mr.subscribers[msgType] = append(mr.subscribers[msgType], ch)
 }
 
-func (mr DefaultMessageRelayer) ListenAndRelay() {
+func (mr DefaultMessageRelayer) ReadAndRelay() {
 	defer mr.Close()
 	for {
 		if msg, err := mr.network.Read(); err != nil {
+			select {
+			case mr.errorCh <- err:
+			default:
+				utils.DPrintf("no error subscribers")
+			}
 			if errors.Is(err, errs.FatalSocketError{}) {
 				utils.DPrintf("%s\n", err.Error())
 				// todo: probably want to cancel all open go routines
 				// by sending on a done channel
 				break
-			}
-			select {
-			case mr.errorCh <- err:
-			default:
-				utils.DPrintf("no error subscribers")
 			}
 		} else {
 			utils.DPrintf("relaying the message %#v\n", msg)

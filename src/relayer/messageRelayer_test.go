@@ -51,6 +51,7 @@ func Test_single_subscriber(t *testing.T) {
 	makeTestCase := func(m MakeMessageRelayerServer) func(t *testing.T) {
 		return func(t *testing.T) {
 			/* setup */
+
 			// sub to start new round messages, bufferred because
 			// busy channels get their messages dropped
 			firstSubCh := make(chan domain.Message, 2)
@@ -69,7 +70,7 @@ func Test_single_subscriber(t *testing.T) {
 			// subscribe each channel to the relayer
 			mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
 
-			go mr.ListenAndRelay()
+			go mr.ReadAndRelay()
 
 			/* actions */
 			// read each message from the channel and increment the count
@@ -80,6 +81,7 @@ func Test_single_subscriber(t *testing.T) {
 
 			// assertions
 			// count of received StartNewRound messages should be two
+
 			require.Equal(t, 2, gotStartNewRound)
 		}
 	}
@@ -89,7 +91,6 @@ func Test_single_subscriber(t *testing.T) {
 	}
 
 }
-
 func Test_multiple_subscribers(t *testing.T) {
 	makeTestCaseName := func(n string) string {
 		return fmt.Sprintf("%sall subscribers receive all messages of correct type", n)
@@ -129,7 +130,7 @@ func Test_multiple_subscribers(t *testing.T) {
 			mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
 			mr.SubscribeToMessage(domain.ReceivedAnswer, secondSubCh)
 
-			go mr.ListenAndRelay()
+			go mr.ReadAndRelay()
 
 			/* actions */
 			// read each message from the channel and increment the count
@@ -205,7 +206,7 @@ func Test_multiple_subscribers_and_errors(t *testing.T) {
 			mr.SubscribeToMessage(domain.StartNewRound, firstSubCh)
 			mr.SubscribeToMessage(domain.ReceivedAnswer, secondSubCh)
 
-			go mr.ListenAndRelay()
+			go mr.ReadAndRelay()
 
 			/* actions */
 			// read each message from the channel and increment the count
@@ -285,7 +286,7 @@ func Test_multiple_subscribers_same_topic(t *testing.T) {
 			mr.SubscribeToMessage(domain.ReceivedAnswer, secondSubCh)
 			mr.SubscribeToMessage(domain.StartNewRound, thirdSubCh)
 
-			go mr.ListenAndRelay()
+			go mr.ReadAndRelay()
 
 			/* actions */
 			// read each message from the channel and increment the count
