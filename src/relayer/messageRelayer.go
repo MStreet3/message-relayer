@@ -11,18 +11,25 @@ type MessageRelayer interface {
 
 type MessageRelayerServer interface {
 	MessageRelayer
-	ReadAndRelay()
+	ReadAndRelay() // serve
 }
 
 type MakeMessageRelayerServer = func(network.NetworkSocket) MessageRelayerServer
+type MakePriorityMessageRelayerServer = func(network.NetworkSocket) PriorityMessageRelayerServer
 
 type MessageEnquer interface {
-	Enqueue(msg domain.Message) error
+	Enqueue(msg domain.Message)
 	Len(msgType domain.MessageType) int
 }
-
+type MessageBroadcaster interface {
+	Broadcast(ch <-chan domain.Message)
+}
+type MessageDequer interface {
+	Dequeue() <-chan domain.Message
+	MessageBroadcaster
+}
 type PriorityMessageRelayerServer interface {
 	MessageEnquer
+	MessageDequer
 	MessageRelayerServer
-	DequeueAndRelay()
 }

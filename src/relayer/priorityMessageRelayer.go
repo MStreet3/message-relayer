@@ -14,7 +14,7 @@ import (
 type PriorityMessageRelayer struct {
 	network     network.NetworkSocket
 	subscribers map[domain.MessageType][]chan<- domain.Message
-	queues      map[domain.MessageType]lruCache.MessagePriorityQueue
+	queues      map[domain.MessageType]*lruCache.MessagePriorityQueue
 	errorCh     chan error
 	closed      bool
 	mu          *sync.RWMutex
@@ -44,26 +44,57 @@ func (mr PriorityMessageRelayer) ReadAndRelay() {
 			}
 		} else {
 			utils.DPrintf("relaying the message %#v\n", msg)
-			mr.Relay(msg)
+			go mr.Enqueue(msg)
+			mr.DequeueAndRelay()
 		}
 	}
 	mr.wg.Wait()
 }
 
-func (mr PriorityMessageRelayer) Enqueue(msg domain.Message) error {
-	return nil
+func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
+	mr.mu.Lock()
+	defer mr.mu.Unlock()
+
+	var q *lruCache.MessagePriorityQueue
+	switch msg.Type {
+	case domain.StartNewRound:
+		q = mr.queues[domain.StartNewRound]
+	case domain.ReceivedAnswer:
+		q = mr.queues[domain.ReceivedAnswer]
+	}
+	q.Push(msg)
 }
 
 func (mr PriorityMessageRelayer) DequeueAndRelay() {
-
+	ch := mr.Dequeue()
+	mr.Broadcast(ch)
 }
 
-func (mr PriorityMessageRelayer) Broadcast(ch chan domain.Message) {
-
+func (mr PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
+	for msg := range ch {
+		go mr.Relay(msg)
+	}
 }
 
-func (mr PriorityMessageRelayer) Dequeue() chan domain.Message {
-	return nil
+func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
+	mr.mu.Lock()
+	defer mr.mu.Unlock()
+
+	sendCh := make(chan domain.Message, 3)
+	go func() {
+		defer close(sendCh)
+		i := 0
+		startNewRoundQueue := mr.queues[domain.StartNewRound]
+		receivedAnswerQueue := mr.queues[domain.ReceivedAnswer]
+		for msg, ok := startNewRoundQueue.Pop(); ok && i < 2; i++ {
+			sendCh <- *msg
+		}
+		if msg, ok := receivedAnswerQueue.Pop(); ok {
+			sendCh <- *msg
+		}
+	}()
+
+	return sendCh
 }
 
 func (mr PriorityMessageRelayer) Len(msgType domain.MessageType) int {
@@ -107,13 +138,13 @@ func NewPriorityMessageRelayer(n network.NetworkSocket) PriorityMessageRelayerSe
 
 	// initialize priority queues
 	// TODO: read queue capacity from config file
-	queues := make(map[domain.MessageType]lruCache.MessagePriorityQueue)
+	queues := make(map[domain.MessageType]*lruCache.MessagePriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
 	for _, t := range msgTypes {
-		queues[t] = lruCache.MessagePriorityQueue{Capacity: domain.PriorityQueueCapacity}
+		queues[t] = &lruCache.MessagePriorityQueue{Capacity: domain.PriorityQueueCapacity}
 	}
 
-	return PriorityMessageRelayer{
+	return &PriorityMessageRelayer{
 		network:     n,
 		subscribers: make(map[domain.MessageType][]chan<- domain.Message),
 		queues:      queues,
