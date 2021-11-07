@@ -7,6 +7,9 @@ const (
 	ReceivedAnswer
 )
 
+/* number of messages held in memory for each
+message type.  additional messages are added by dropping
+the oldest message */
 var PriorityQueueCapacity int = 100
 
 type Message struct {

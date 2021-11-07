@@ -2,6 +2,10 @@ package lruCache
 
 import "github.com/mstreet3/message-relayer/domain"
 
+type PriorityQueue interface {
+	Pop() (*domain.Message, bool)
+	Push(domain.Message)
+}
 type MessagePriorityQueue struct {
 	Capacity int
 	Queue    DblLinkedList

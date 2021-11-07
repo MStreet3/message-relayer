@@ -46,21 +46,19 @@ func (mr *PriorityMessageRelayer) ReadAndRelay() {
 		} else {
 			utils.DPrintf("relaying the message %#v\n", msg)
 			mr.wg.Add(1)
-			go func(wg *sync.WaitGroup) {
-				defer wg.Done()
+			go func(msg domain.Message) {
+				defer mr.wg.Done()
 				mr.Enqueue(msg)
-			}(mr.wg)
+			}(msg)
 
 			mr.wg.Add(1)
-			go func(wg *sync.WaitGroup) {
-				defer wg.Done()
+			go func() {
+				defer mr.wg.Done()
 				mr.DequeueAndRelay()
-			}(mr.wg)
-
+			}()
 		}
 
 	}
-
 	mr.wg.Wait()
 }
 
@@ -79,6 +77,7 @@ func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
 }
 
 func (mr *PriorityMessageRelayer) DequeueAndRelay() {
+
 	ch := mr.Dequeue()
 	mr.Broadcast(ch)
 }
