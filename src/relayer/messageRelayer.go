@@ -18,6 +18,7 @@ type MakeMessageRelayerServer = func(network.NetworkSocket) MessageRelayerServer
 
 type MessageEnquer interface {
 	Enqueue(msg domain.Message) error
+	Len(msgType domain.MessageType) int
 }
 
 type PriorityMessageRelayerServer interface {

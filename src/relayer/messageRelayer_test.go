@@ -32,7 +32,7 @@ var NetworkErrorResponse = network.NetworkResponse{Message: domain.Message{},
 
 type MessageRelayerServerTestCase struct {
 	Name  string
-	Maker MakeMessageRelayerServer
+	Maker interface{}
 }
 
 // each relayer should pass the shared test cases
@@ -92,7 +92,7 @@ func Test_single_subscriber(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker))
+		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker.(MakeMessageRelayerServer)))
 	}
 
 }
@@ -157,7 +157,7 @@ func Test_multiple_subscribers(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker))
+		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker.(MakeMessageRelayerServer)))
 	}
 
 }
@@ -226,7 +226,7 @@ func Test_multiple_subscribers_and_errors(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker))
+		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker.(MakeMessageRelayerServer)))
 	}
 
 }
@@ -309,7 +309,7 @@ func Test_multiple_subscribers_same_topic(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker))
+		t.Run(makeTestCaseName(tc.Name), makeTestCase(tc.Maker.(MakeMessageRelayerServer)))
 	}
 
 }

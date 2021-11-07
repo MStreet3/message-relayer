@@ -7,15 +7,18 @@ type MessagePriorityQueue struct {
 	Queue    DblLinkedList
 }
 
-func (q *MessagePriorityQueue) Pop() domain.Message {
+func (q *MessagePriorityQueue) Pop() (*domain.Message, bool) {
 	node := q.Queue.Head
 	q.Queue.DeleteListHead()
-	return node.Value.(domain.Message)
+	if node != nil {
+		return node.Value.(*domain.Message), true
+	}
+	return nil, false
 }
 
 func (q *MessagePriorityQueue) Push(msg domain.Message) {
 	n := &Node{
-		Value: msg,
+		Value: &msg,
 	}
 	if q.Queue.Length == q.Capacity {
 		q.Queue.DeleteListTail()

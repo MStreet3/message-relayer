@@ -66,6 +66,10 @@ func (mr PriorityMessageRelayer) Dequeue() chan domain.Message {
 	return nil
 }
 
+func (mr PriorityMessageRelayer) Len(msgType domain.MessageType) int {
+	return mr.queues[msgType].Queue.Length
+}
+
 func (mr *PriorityMessageRelayer) Close() {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
@@ -99,7 +103,7 @@ func (mr *PriorityMessageRelayer) Relay(msg domain.Message) {
 	}
 }
 
-func NewPriorityMessageRelayer(n network.NetworkSocket) MessageRelayerServer {
+func NewPriorityMessageRelayer(n network.NetworkSocket) PriorityMessageRelayerServer {
 
 	// initialize priority queues
 	// TODO: read queue capacity from config file
