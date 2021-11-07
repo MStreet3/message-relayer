@@ -21,15 +21,16 @@ type PriorityMessageRelayer struct {
 	wg          *sync.WaitGroup
 }
 
-func (mr PriorityMessageRelayer) SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message) {
+func (mr *PriorityMessageRelayer) SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 	mr.subscribers[msgType] = append(mr.subscribers[msgType], ch)
 }
 
-func (mr PriorityMessageRelayer) ReadAndRelay() {
+func (mr *PriorityMessageRelayer) ReadAndRelay() {
 	defer mr.Close()
 	for {
+
 		if msg, err := mr.network.Read(); err != nil {
 			select {
 			case mr.errorCh <- err:
@@ -44,10 +45,22 @@ func (mr PriorityMessageRelayer) ReadAndRelay() {
 			}
 		} else {
 			utils.DPrintf("relaying the message %#v\n", msg)
-			go mr.Enqueue(msg)
-			mr.DequeueAndRelay()
+			mr.wg.Add(1)
+			go func(wg *sync.WaitGroup) {
+				defer wg.Done()
+				mr.Enqueue(msg)
+			}(mr.wg)
+
+			mr.wg.Add(1)
+			go func(wg *sync.WaitGroup) {
+				defer wg.Done()
+				mr.DequeueAndRelay()
+			}(mr.wg)
+
 		}
+
 	}
+
 	mr.wg.Wait()
 }
 
@@ -65,14 +78,14 @@ func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
 	q.Push(msg)
 }
 
-func (mr PriorityMessageRelayer) DequeueAndRelay() {
+func (mr *PriorityMessageRelayer) DequeueAndRelay() {
 	ch := mr.Dequeue()
 	mr.Broadcast(ch)
 }
 
-func (mr PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
+func (mr *PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
 	for msg := range ch {
-		go mr.Relay(msg)
+		mr.Relay(msg)
 	}
 }
 
@@ -97,7 +110,7 @@ func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
 	return sendCh
 }
 
-func (mr PriorityMessageRelayer) Len(msgType domain.MessageType) int {
+func (mr *PriorityMessageRelayer) Len(msgType domain.MessageType) int {
 	return mr.queues[msgType].Queue.Length
 }
 
@@ -106,13 +119,15 @@ func (mr *PriorityMessageRelayer) Close() {
 	defer mr.mu.Unlock()
 
 	if !mr.closed {
+		utils.DPrintf("starting shutdown procedure")
 		mr.closed = true
 		for msgType := range mr.subscribers {
 			for _, ch := range mr.subscribers[msgType] {
 				close(ch)
 			}
 		}
-		close(mr.errorCh)
+
+		utils.DPrintf("everything is shutdown")
 	}
 }
 
