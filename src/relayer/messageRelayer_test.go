@@ -35,17 +35,22 @@ type MessageRelayerServerTestCase struct {
 	Maker MakeMessageRelayerServer
 }
 
+// each relayer should pass the shared test cases
+var testCases []MessageRelayerServerTestCase = []MessageRelayerServerTestCase{
+	{
+		Name:  "DefaultMessageRelayer:",
+		Maker: NewDefaultMessageRelayer,
+	},
+	{
+		Name:  "PrioritytMessageRelayer:",
+		Maker: NewPriorityMessageRelayer,
+	},
+}
+
 func Test_single_subscriber(t *testing.T) {
 
 	makeTestCaseName := func(n string) string {
 		return fmt.Sprintf("%ssubscriber receives all messages of correct type", n)
-	}
-
-	testCases := []MessageRelayerServerTestCase{
-		{
-			Name:  "DefaultMessageRelayer:",
-			Maker: NewDefaultMessageRelayer,
-		},
 	}
 
 	makeTestCase := func(m MakeMessageRelayerServer) func(t *testing.T) {
@@ -94,13 +99,6 @@ func Test_single_subscriber(t *testing.T) {
 func Test_multiple_subscribers(t *testing.T) {
 	makeTestCaseName := func(n string) string {
 		return fmt.Sprintf("%sall subscribers receive all messages of correct type", n)
-	}
-
-	testCases := []MessageRelayerServerTestCase{
-		{
-			Name:  "DefaultMessageRelayer:",
-			Maker: NewDefaultMessageRelayer,
-		},
 	}
 
 	makeTestCase := func(m MakeMessageRelayerServer) func(t *testing.T) {
@@ -167,13 +165,6 @@ func Test_multiple_subscribers(t *testing.T) {
 func Test_multiple_subscribers_and_errors(t *testing.T) {
 	makeTestCaseName := func(n string) string {
 		return fmt.Sprintf("%srelayer continues with non fatal network errors", n)
-	}
-
-	testCases := []MessageRelayerServerTestCase{
-		{
-			Name:  "DefaultMessageRelayer:",
-			Maker: NewDefaultMessageRelayer,
-		},
 	}
 
 	makeTestCase := func(m MakeMessageRelayerServer) func(t *testing.T) {
@@ -243,13 +234,6 @@ func Test_multiple_subscribers_and_errors(t *testing.T) {
 func Test_multiple_subscribers_same_topic(t *testing.T) {
 	makeTestCaseName := func(n string) string {
 		return fmt.Sprintf("%smultiple subscribers of same topic receive all messages of correct type", n)
-	}
-
-	testCases := []MessageRelayerServerTestCase{
-		{
-			Name:  "DefaultMessageRelayer:",
-			Maker: NewDefaultMessageRelayer,
-		},
 	}
 
 	makeTestCase := func(m MakeMessageRelayerServer) func(t *testing.T) {

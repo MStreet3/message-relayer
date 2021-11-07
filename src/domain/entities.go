@@ -7,6 +7,8 @@ const (
 	ReceivedAnswer
 )
 
+var PriorityQueueCapacity int = 100
+
 type Message struct {
 	Type MessageType
 	Data []byte
