@@ -8,10 +8,12 @@ type MessagePriorityQueue struct {
 }
 
 func (q *MessagePriorityQueue) Pop() (*domain.Message, bool) {
-	node := q.Queue.Head
-	q.Queue.DeleteListHead()
-	if node != nil {
-		return node.Value.(*domain.Message), true
+	if q.Queue.Length > 1 {
+		node := q.Queue.Head
+		q.Queue.DeleteListHead()
+		if node != nil {
+			return node.Value.(*domain.Message), true
+		}
 	}
 	return nil, false
 }
