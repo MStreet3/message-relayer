@@ -21,14 +21,16 @@ type PriorityMessageRelayer struct {
 	wg          *sync.WaitGroup
 }
 
+func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) <-chan domain.Message { return nil }
+
 func (mr *PriorityMessageRelayer) SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 	mr.subscribers[msgType] = append(mr.subscribers[msgType], ch)
 }
 
-func (mr *PriorityMessageRelayer) ReadAndRelay() {
-	defer mr.Close()
+func (mr *PriorityMessageRelayer) Start() {
+	defer mr.Stop()
 	for {
 
 		if msg, err := mr.network.Read(); err != nil {
@@ -49,7 +51,7 @@ func (mr *PriorityMessageRelayer) ReadAndRelay() {
 			go func(msg domain.Message) {
 				defer mr.wg.Done()
 				mr.Enqueue(msg)
-			}(msg)
+			}(*msg)
 
 			mr.wg.Add(1)
 			go func() {
@@ -113,7 +115,7 @@ func (mr *PriorityMessageRelayer) Len(msgType domain.MessageType) int {
 	return mr.queues[msgType].Queue.Length
 }
 
-func (mr *PriorityMessageRelayer) Close() {
+func (mr *PriorityMessageRelayer) Stop() {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 

@@ -16,12 +16,12 @@ message relayer.
 func Start() {
 	var wg sync.WaitGroup
 	responses := []network.NetworkResponse{
-		{Message: domain.Message{Type: domain.ReceivedAnswer}}}
+		{Message: &domain.Message{Type: domain.ReceivedAnswer}}}
 	ns := network.NewNetworkSocketStub(responses)
 	mr := relayer.NewDefaultMessageRelayer(ns)
 	ch := make(chan domain.Message)
 	mr.SubscribeToMessage(domain.ReceivedAnswer, ch)
-	go mr.ReadAndRelay()
+	go mr.Start()
 
 	wg.Add(1)
 	go func() {
@@ -32,5 +32,4 @@ func Start() {
 	}()
 
 	wg.Wait()
-
 }

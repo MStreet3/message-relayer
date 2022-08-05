@@ -1,19 +1,22 @@
 package relayer
 
 import (
-	"errors"
-
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/network"
 )
 
+type Subscriber interface {
+	Subscribe(domain.MessageType) <-chan domain.Message
+}
 type MessageRelayer interface {
+	Subscriber
 	SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message)
 }
 
 type MessageRelayerServer interface {
 	MessageRelayer
-	ReadAndRelay() // serve
+	Start() // serve
+	Stop()
 }
 type MessageEnquer interface {
 	Enqueue(msg domain.Message)
