@@ -20,7 +20,6 @@ type MessageRelayerServer interface {
 }
 type MessageEnquer interface {
 	Enqueue(msg domain.Message)
-	Len(msgType domain.MessageType) int
 }
 type MessageBroadcaster interface {
 	Broadcast(ch <-chan domain.Message)
@@ -38,8 +37,8 @@ type PriorityMessageRelayerServer interface {
 /*
 	todo: fix the dependecy injection of the makeTestCase function
 */
-type MakeMessageRelayerServer = func(network.NetworkSocket) MessageRelayerServer
-type MakePriorityMessageRelayerServer = func(network.NetworkSocket) PriorityMessageRelayerServer
+type MakeMessageRelayerServer = func(network.NetworkReader) MessageRelayerServer
+type MakePriorityMessageRelayerServer = func(network.NetworkReader) PriorityMessageRelayerServer
 type MessageRelayerServerTestCase struct {
 	Name  string
 	Maker interface{}

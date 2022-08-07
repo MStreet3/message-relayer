@@ -12,7 +12,7 @@ import (
 )
 
 type PriorityMessageRelayer struct {
-	network     network.NetworkSocket
+	network     network.NetworkReader
 	subscribers map[domain.MessageType][]*SubscriberAddress
 	queues      map[domain.MessageType]lruCache.PriorityQueue
 	errorCh     chan error
@@ -115,10 +115,6 @@ func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
 	return sendCh
 }
 
-func (mr *PriorityMessageRelayer) Len(msgType domain.MessageType) int {
-	return mr.queues[msgType].Len()
-}
-
 func (mr *PriorityMessageRelayer) Stop() {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
@@ -165,7 +161,7 @@ func (mr *PriorityMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
 
-func NewPriorityMessageRelayer(n network.NetworkSocket) PriorityMessageRelayerServer {
+func NewPriorityMessageRelayer(n network.NetworkReader) PriorityMessageRelayerServer {
 	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
 	for _, t := range msgTypes {

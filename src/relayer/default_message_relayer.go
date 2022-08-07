@@ -11,7 +11,7 @@ import (
 )
 
 type DefaultMessageRelayer struct {
-	network     network.NetworkSocketRestarter
+	network     network.RestartNetworkReader
 	subscribers map[domain.MessageType][]*SubscriberAddress
 	errorCh     chan error
 	stopCh      chan struct{}
@@ -111,7 +111,7 @@ func (mr *DefaultMessageRelayer) Stop() {
 	}
 }
 
-func NewDefaultMessageRelayer(n network.NetworkSocketRestarter) MessageRelayerServer {
+func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayerServer {
 	return &DefaultMessageRelayer{
 		network:     n,
 		subscribers: make(map[domain.MessageType][]*SubscriberAddress),
