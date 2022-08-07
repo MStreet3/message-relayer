@@ -2,6 +2,7 @@ package relayer
 
 import (
 	"errors"
+	"log"
 	"sync"
 
 	"github.com/mstreet3/message-relayer/domain"
@@ -52,7 +53,9 @@ func (mr *PriorityMessageRelayer) Start() {
 			}
 			if errors.Is(err, errs.FatalSocketError{}) {
 				utils.DPrintf("%s\n", err.Error())
-				mr.network.Restart()
+				if err := mr.network.Restart(); err != nil {
+					log.Fatal(err)
+				}
 			}
 			continue
 		}
