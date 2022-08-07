@@ -10,6 +10,7 @@ type Subscriber interface {
 }
 type MessageRelayer interface {
 	Subscriber
+	Errors() <-chan error
 }
 
 type MessageRelayerServer interface {

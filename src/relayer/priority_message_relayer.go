@@ -161,6 +161,10 @@ func (mr *PriorityMessageRelayer) Relay(msg domain.Message) {
 	}
 }
 
+func (mr *PriorityMessageRelayer) Errors() <-chan error {
+	return mr.errorCh
+}
+
 func NewPriorityMessageRelayer(n network.NetworkSocket) PriorityMessageRelayerServer {
 	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}

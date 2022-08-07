@@ -37,6 +37,10 @@ func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) <-chan domain.
 	return msgCh
 }
 
+func (mr *DefaultMessageRelayer) Errors() <-chan error {
+	return mr.errorCh
+}
+
 func (mr *DefaultMessageRelayer) Start() {
 	for {
 		select {
