@@ -2,7 +2,6 @@ package relayer
 
 import (
 	"github.com/mstreet3/message-relayer/domain"
-	"github.com/mstreet3/message-relayer/network"
 )
 
 type Subscriber interface {
@@ -32,14 +31,4 @@ type PriorityMessageRelayerServer interface {
 	MessageEnquer
 	MessageDequer
 	MessageRelayerServer
-}
-
-/*
-	todo: fix the dependecy injection of the makeTestCase function
-*/
-type MakeMessageRelayerServer = func(network.NetworkReader) MessageRelayerServer
-type MakePriorityMessageRelayerServer = func(network.NetworkReader) PriorityMessageRelayerServer
-type MessageRelayerServerTestCase struct {
-	Name  string
-	Maker interface{}
 }

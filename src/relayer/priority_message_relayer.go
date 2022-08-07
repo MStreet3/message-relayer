@@ -12,7 +12,7 @@ import (
 )
 
 type PriorityMessageRelayer struct {
-	network     network.NetworkReader
+	network     network.RestartNetworkReader
 	subscribers map[domain.MessageType][]*SubscriberAddress
 	queues      map[domain.MessageType]lruCache.PriorityQueue
 	errorCh     chan error
@@ -52,6 +52,7 @@ func (mr *PriorityMessageRelayer) Start() {
 			}
 			if errors.Is(err, errs.FatalSocketError{}) {
 				utils.DPrintf("%s\n", err.Error())
+				mr.network.Restart()
 			}
 			continue
 		}
