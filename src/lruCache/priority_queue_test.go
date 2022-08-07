@@ -9,14 +9,14 @@ import (
 
 func Test_pop_empty_queue_returns_nil(t *testing.T) {
 	var expected *domain.Message
-	queue := MessagePriorityQueue{Capacity: domain.PriorityQueueCapacity}
+	queue := NewMessagePriorityQueue(domain.PriorityQueueCapacity)
 	latest, present := queue.Pop()
 	require.Equal(t, expected, latest)
 	require.Equal(t, false, present)
 }
 
 func Test_queue_is_LIFO(t *testing.T) {
-	queue := MessagePriorityQueue{Capacity: domain.PriorityQueueCapacity}
+	queue := NewMessagePriorityQueue(domain.PriorityQueueCapacity)
 	messages := []domain.Message{
 		{Type: domain.StartNewRound,
 			Data: []byte("first in")},
