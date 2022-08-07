@@ -10,7 +10,6 @@ type Subscriber interface {
 }
 type MessageRelayer interface {
 	Subscriber
-	SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message)
 }
 
 type MessageRelayerServer interface {

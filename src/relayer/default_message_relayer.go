@@ -4,24 +4,11 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
 	"github.com/mstreet3/message-relayer/network"
 	"github.com/mstreet3/message-relayer/utils"
 )
-
-type SubscriberAddress struct {
-	msgCh chan<- domain.Message
-	ID    uuid.UUID
-}
-
-func NewSubscriberAddress(ch chan<- domain.Message) *SubscriberAddress {
-	return &SubscriberAddress{
-		msgCh: ch,
-		ID:    uuid.New(),
-	}
-}
 
 type DefaultMessageRelayer struct {
 	network     network.NetworkSocketRestarter
@@ -48,10 +35,6 @@ func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) <-chan domain.
 	}()
 
 	return msgCh
-}
-
-func (mr *DefaultMessageRelayer) SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message) {
-	panic("not implemented")
 }
 
 func (mr *DefaultMessageRelayer) Start() {
