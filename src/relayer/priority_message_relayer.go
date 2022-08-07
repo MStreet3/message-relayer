@@ -2,6 +2,7 @@ package relayer
 
 import (
 	"errors"
+	"log"
 	"sync"
 
 	"github.com/mstreet3/message-relayer/domain"
@@ -52,7 +53,9 @@ func (mr *PriorityMessageRelayer) Start() {
 			}
 			if errors.Is(err, errs.FatalSocketError{}) {
 				utils.DPrintf("%s\n", err.Error())
-				mr.network.Restart()
+				if err := mr.network.Restart(); err != nil {
+					log.Fatal(err)
+				}
 			}
 			continue
 		}
@@ -162,7 +165,7 @@ func (mr *PriorityMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
 
-func NewPriorityMessageRelayer(n network.NetworkReader) PriorityMessageRelayerServer {
+func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRelayerServer {
 	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
 	for _, t := range msgTypes {
