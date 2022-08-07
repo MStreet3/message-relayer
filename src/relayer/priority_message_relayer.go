@@ -162,7 +162,7 @@ func (mr *PriorityMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
 
-func NewPriorityMessageRelayer(n network.NetworkReader) PriorityMessageRelayerServer {
+func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRelayerServer {
 	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
 	for _, t := range msgTypes {
