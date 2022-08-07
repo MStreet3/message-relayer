@@ -12,26 +12,39 @@ import (
 )
 
 type PriorityMessageRelayer struct {
-	network     network.NetworkSocket
-	subscribers map[domain.MessageType][]chan<- domain.Message
-	queues      map[domain.MessageType]*lruCache.MessagePriorityQueue
+	network     network.RestartNetworkReader
+	subscribers map[domain.MessageType][]*SubscriberAddress
+	queues      map[domain.MessageType]lruCache.PriorityQueue
 	errorCh     chan error
-	closed      bool
+	stopCh      chan struct{}
 	mu          *sync.RWMutex
 	wg          *sync.WaitGroup
 }
 
-func (mr *PriorityMessageRelayer) SubscribeToMessage(msgType domain.MessageType, ch chan<- domain.Message) {
+func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) <-chan domain.Message {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
-	mr.subscribers[msgType] = append(mr.subscribers[msgType], ch)
+
+	msgCh := make(chan domain.Message)
+	sa := NewSubscriberAddress(msgCh)
+	mr.subscribers[mt] = append(mr.subscribers[mt], sa)
+
+	mr.wg.Add(1)
+	go func() {
+		defer mr.wg.Done()
+		defer close(msgCh)
+		<-mr.stopCh
+	}()
+
+	return msgCh
 }
 
-func (mr *PriorityMessageRelayer) ReadAndRelay() {
-	defer mr.Close()
+func (mr *PriorityMessageRelayer) Start() {
 	for {
 
-		if msg, err := mr.network.Read(); err != nil {
+		msg, err := mr.network.Read()
+
+		if err != nil {
 			select {
 			case mr.errorCh <- err:
 			default:
@@ -39,34 +52,29 @@ func (mr *PriorityMessageRelayer) ReadAndRelay() {
 			}
 			if errors.Is(err, errs.FatalSocketError{}) {
 				utils.DPrintf("%s\n", err.Error())
-				// todo: probably want to cancel all open go routines
-				// by sending on a done channel
-				break
+				mr.network.Restart()
 			}
-		} else {
-			utils.DPrintf("relaying the message %#v\n", msg)
-			mr.wg.Add(1)
-			go func(msg domain.Message) {
-				defer mr.wg.Done()
-				mr.Enqueue(msg)
-			}(msg)
-
-			mr.wg.Add(1)
-			go func() {
-				defer mr.wg.Done()
-				mr.DequeueAndRelay()
-			}()
+			continue
 		}
 
+		utils.DPrintf("relaying the message %#v\n", msg)
+
+		mr.Enqueue(*msg)
+
+		mr.wg.Add(1)
+		go func() {
+			defer mr.wg.Done()
+			mr.DequeueAndRelay()
+		}()
+
 	}
-	mr.wg.Wait()
 }
 
 func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
-	var q *lruCache.MessagePriorityQueue
+	var q lruCache.PriorityQueue
 	switch msg.Type {
 	case domain.StartNewRound:
 		q = mr.queues[domain.StartNewRound]
@@ -77,7 +85,6 @@ func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
 }
 
 func (mr *PriorityMessageRelayer) DequeueAndRelay() {
-
 	ch := mr.Dequeue()
 	mr.Broadcast(ch)
 }
@@ -109,24 +116,20 @@ func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
 	return sendCh
 }
 
-func (mr *PriorityMessageRelayer) Len(msgType domain.MessageType) int {
-	return mr.queues[msgType].Queue.Length
-}
-
-func (mr *PriorityMessageRelayer) Close() {
+func (mr *PriorityMessageRelayer) Stop() {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
-	if !mr.closed {
-		utils.DPrintf("starting shutdown procedure")
-		mr.closed = true
-		for msgType := range mr.subscribers {
-			for _, ch := range mr.subscribers[msgType] {
-				close(ch)
-			}
-		}
-
-		utils.DPrintf("everything is shutdown")
+	select {
+	case <-mr.stopCh:
+		return
+	default:
+		utils.DPrintf("starting graceful shutdown\n")
+		close(mr.stopCh)
+		utils.DPrintf("waiting on children routines\n")
+		mr.wg.Wait()
+		close(mr.errorCh)
+		utils.DPrintf("relayer is closed\n")
 	}
 }
 
@@ -135,34 +138,43 @@ func (mr *PriorityMessageRelayer) Relay(msg domain.Message) {
 	defer mr.mu.RUnlock()
 
 	msgType := msg.Type
-	for _, ch := range mr.subscribers[msgType] {
-		mr.wg.Add(1)
-		go func(ch chan<- domain.Message) {
-			select {
-			case ch <- msg:
-			default:
-				utils.DPrintf("skipping busy channel\n")
-			}
-			mr.wg.Done()
-		}(ch)
+	for _, sub := range mr.subscribers[msgType] {
+		select {
+		case <-mr.stopCh:
+			return
+		default:
+			mr.wg.Add(1)
+			go func(sub *SubscriberAddress) {
+				defer mr.wg.Done()
+				select {
+				case sub.msgCh <- msg:
+					utils.DPrintf("%s received message of type %s\n", sub.ID.String(), msg.Type)
+				case <-mr.stopCh:
+				default:
+					utils.DPrintf("%s is busy, dropping message of type %s\n", sub.ID.String(), msg.Type)
+				}
+			}(sub)
+		}
 	}
 }
 
-func NewPriorityMessageRelayer(n network.NetworkSocket) PriorityMessageRelayerServer {
+func (mr *PriorityMessageRelayer) Errors() <-chan error {
+	return mr.errorCh
+}
 
-	// initialize priority queues
-	// TODO: read queue capacity from config file
-	queues := make(map[domain.MessageType]*lruCache.MessagePriorityQueue)
+func NewPriorityMessageRelayer(n network.NetworkReader) PriorityMessageRelayerServer {
+	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
 	for _, t := range msgTypes {
-		queues[t] = &lruCache.MessagePriorityQueue{Capacity: domain.PriorityQueueCapacity}
+		queues[t] = lruCache.NewMessagePriorityQueue(domain.PriorityQueueCapacity)
 	}
 
 	return &PriorityMessageRelayer{
 		network:     n,
-		subscribers: make(map[domain.MessageType][]chan<- domain.Message),
+		subscribers: make(map[domain.MessageType][]*SubscriberAddress),
 		queues:      queues,
 		errorCh:     make(chan error),
+		stopCh:      make(chan struct{}),
 		mu:          &sync.RWMutex{},
 		wg:          &sync.WaitGroup{},
 	}

@@ -7,6 +7,7 @@ import (
 )
 
 type PriorityQueue interface {
+	Len() int
 	Pop() (*domain.Message, bool)
 	Push(domain.Message)
 }
@@ -21,6 +22,10 @@ func NewMessagePriorityQueue(c int) PriorityQueue {
 		Capacity: c,
 		Queue:    list.New(),
 	}
+}
+
+func (q *MessagePriorityQueue) Len() int {
+	return q.Queue.Len()
 }
 
 func (q *MessagePriorityQueue) Pop() (*domain.Message, bool) {
