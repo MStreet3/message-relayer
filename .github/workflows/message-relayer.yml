@@ -23,14 +23,14 @@ jobs:
             ${{ runner.os }}-message-relayer
       - name: Run Linter
         uses: golangci/golangci-lint-action@v2
-          with:
-            # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-            version: v1.45.2
+        with:
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: v1.45.2
 
-            # Optional: working directory, useful for monorepos
-            # working-directory: somedir
+          # Optional: working directory, useful for monorepos
+          # working-directory: somedir
 
-            # Optional: golangci-lint command line arguments.
-            args: --timeout=2m0s
+          # Optional: golangci-lint command line arguments.
+          args: --timeout=2m0s
       - name: Run Test Suite
         run: go test ./src/...
