@@ -1,11 +1,13 @@
 package relayer
 
 import (
+	"context"
+
 	"github.com/mstreet3/message-relayer/domain"
 )
 
 type Subscriber interface {
-	Subscribe(domain.MessageType) <-chan domain.Message
+	Subscribe(context.Context, domain.MessageType) <-chan domain.Message
 }
 type MessageRelayer interface {
 	Subscriber
@@ -14,8 +16,7 @@ type MessageRelayer interface {
 
 type MessageRelayerServer interface {
 	MessageRelayer
-	Start() // serve
-	Stop()
+	Start(context.Context) <-chan struct{} // serve
 }
 type MessageEnquer interface {
 	Enqueue(msg domain.Message)

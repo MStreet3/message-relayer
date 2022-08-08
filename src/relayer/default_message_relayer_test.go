@@ -1,6 +1,7 @@
 package relayer
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -11,9 +12,9 @@ import (
 
 func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 	var (
-		wg sync.WaitGroup
-
-		responses = []network.NetworkResponse{
+		wg          sync.WaitGroup
+		ctx, cancel = context.WithCancel(context.Background())
+		responses   = []network.NetworkResponse{
 			StartNewRoundResponse,
 			StartNewRoundResponse,
 			ReceivedAnswerResponse,
@@ -27,17 +28,17 @@ func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 		gotRA   = 0
 	)
 
-	go mr.Start()
+	terminated := mr.Start(ctx)
 
 	// subscribe to the relayer
-	snrCh := mr.Subscribe(domain.StartNewRound)
-	raCh := mr.Subscribe(domain.ReceivedAnswer)
+	snrCh := mr.Subscribe(ctx, domain.StartNewRound)
+	raCh := mr.Subscribe(ctx, domain.ReceivedAnswer)
 
 	/* actions */
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer mr.Stop()
+		defer cancel()
 		for {
 			select {
 			case <-snrCh:
@@ -64,5 +65,8 @@ func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 	require.False(t, open)
 
 	_, open = <-raCh
+	require.False(t, open)
+
+	_, open = <-terminated
 	require.False(t, open)
 }
