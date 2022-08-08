@@ -7,24 +7,41 @@ import (
 	"os/signal"
 
 	"github.com/mstreet3/message-relayer/app"
+	"github.com/mstreet3/message-relayer/domain"
+	"github.com/mstreet3/message-relayer/network"
+	"github.com/mstreet3/message-relayer/relayer"
 	"github.com/mstreet3/message-relayer/utils"
 )
 
+var responses = []network.NetworkResponse{
+	{
+		Message: &domain.Message{
+			Type: domain.ReceivedAnswer,
+		},
+	},
+}
+
 func main() {
-	utils.DPrintf("starting the app")
+	var (
+		ctxWithCancel, cancel = context.WithCancel(context.Background())
+		ns                    = network.NewNetworkSocketStub(responses)
+		mr                    = relayer.NewDefaultMessageRelayer(ns)
+		interrupt             = make(chan os.Signal, 1)
+	)
 
 	// Notify main of any interruptions
-	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	ctxWithCancel, cancel := context.WithCancel(context.Background())
-	shutdown := app.Start(ctxWithCancel)
+	application := app.NewApplication(ns, mr)
+
+	utils.DPrintf("starting the app")
+	stopped := application.Start(ctxWithCancel)
 
 	// Handle graceful shutdown
 	for {
 		select {
-		case <-shutdown:
-			log.Println("shutdown complete, goodbye")
+		case <-stopped:
+			log.Println("app is stopped, goodbye")
 			return
 
 		case <-interrupt:

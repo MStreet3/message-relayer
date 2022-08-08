@@ -15,7 +15,7 @@ import (
 
 type PriorityMessageRelayer struct {
 	network     network.RestartNetworkReader
-	subscribers map[domain.MessageType][]*SubscriberAddress
+	subscribers map[domain.MessageType][]MessageObserver
 	queues      map[domain.MessageType]lruCache.PriorityQueue
 	errorCh     chan error
 	stopCh      chan struct{}
@@ -142,17 +142,7 @@ func (mr *PriorityMessageRelayer) Relay(msg domain.Message) {
 		case <-mr.stopCh:
 			return
 		default:
-			mr.wg.Add(1)
-			go func(sub *SubscriberAddress) {
-				defer mr.wg.Done()
-				select {
-				case sub.msgCh <- msg:
-					utils.DPrintf("%s received message of type %s\n", sub.ID.String(), msg.Type)
-				case <-mr.stopCh:
-				default:
-					utils.DPrintf("%s is busy, dropping message of type %s\n", sub.ID.String(), msg.Type)
-				}
-			}(sub)
+			_ = sub.Observe(context.Background(), msg)
 		}
 	}
 }
@@ -170,7 +160,7 @@ func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRe
 
 	return &PriorityMessageRelayer{
 		network:     n,
-		subscribers: make(map[domain.MessageType][]*SubscriberAddress),
+		subscribers: make(map[domain.MessageType][]MessageObserver),
 		queues:      queues,
 		errorCh:     make(chan error),
 		stopCh:      make(chan struct{}),

@@ -14,7 +14,7 @@ import (
 
 type DefaultMessageRelayer struct {
 	network     network.RestartNetworkReader
-	subscribers map[domain.MessageType][]*SubscriberAddress
+	subscribers map[domain.MessageType][]MessageObserver
 	errorCh     chan error
 	mu          *sync.RWMutex
 	wg          *sync.WaitGroup
@@ -91,7 +91,13 @@ func (mr *DefaultMessageRelayer) Relay(ctx context.Context, msg domain.Message) 
 		case <-ctx.Done():
 			return
 		default:
-			mr.wg.Add(1)
+			_ = sub.Observe(ctx, msg)
+		}
+	}
+}
+
+/*
+mr.wg.Add(1)
 			go func(sub *SubscriberAddress) {
 				defer mr.wg.Done()
 				select {
@@ -101,15 +107,12 @@ func (mr *DefaultMessageRelayer) Relay(ctx context.Context, msg domain.Message) 
 				default:
 					utils.DPrintf("%s is busy, dropping message of type %s\n", sub.ID.String(), msg.Type)
 				}
-			}(sub)
-		}
-	}
-}
+			}(sub) */
 
 func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayerServer {
 	return &DefaultMessageRelayer{
 		network:     n,
-		subscribers: make(map[domain.MessageType][]*SubscriberAddress),
+		subscribers: make(map[domain.MessageType][]MessageObserver),
 		errorCh:     make(chan error),
 		mu:          &sync.RWMutex{},
 		wg:          &sync.WaitGroup{},

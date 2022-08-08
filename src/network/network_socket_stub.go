@@ -33,7 +33,7 @@ func (n *NetworkSocketStub) Restart() error {
 	return nil
 }
 
-func NewNetworkSocketStub(responses []NetworkResponse) *NetworkSocketStub {
+func NewNetworkSocketStub(responses []NetworkResponse) RestartNetworkReader {
 	return &NetworkSocketStub{
 		Cursor:    0,
 		Responses: responses,
