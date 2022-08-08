@@ -13,10 +13,21 @@ import (
 a basic example of how a subscriber could use the
 message relayer.
 */
-func Start() {
+func Start(ctx context.Context) <-chan struct{} {
+	terminated := make(chan struct{})
+
+	go func() {
+		defer close(terminated)
+		run(ctx)
+	}()
+
+	return terminated
+}
+
+func run(ctx context.Context) {
 	var (
-		ctx, cancel = context.WithCancel(context.Background())
-		responses   = []network.NetworkResponse{
+		ctxwc, cancel = context.WithCancel(ctx)
+		responses     = []network.NetworkResponse{
 			{
 				Message: &domain.Message{
 					Type: domain.ReceivedAnswer,
@@ -27,12 +38,12 @@ func Start() {
 		mr = relayer.NewDefaultMessageRelayer(ns)
 	)
 
-	go mr.Start()
-	defer mr.Stop()
-	defer cancel()
+	stopped := mr.Start(ctxwc)
 
-	l := mr.Subscribe(domain.ReceivedAnswer)
+	l := mr.Subscribe(ctxwc, domain.ReceivedAnswer)
 
-	done := utils.Take(ctx.Done(), l, 5)
+	done := utils.Take(ctx.Done(), l, 500)
 	<-done
+	cancel()
+	<-stopped
 }

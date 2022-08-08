@@ -1,6 +1,7 @@
 package relayer
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -15,12 +16,11 @@ type DefaultMessageRelayer struct {
 	network     network.RestartNetworkReader
 	subscribers map[domain.MessageType][]*SubscriberAddress
 	errorCh     chan error
-	stopCh      chan struct{}
 	mu          *sync.RWMutex
 	wg          *sync.WaitGroup
 }
 
-func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) <-chan domain.Message {
+func (mr *DefaultMessageRelayer) Subscribe(ctx context.Context, mt domain.MessageType) <-chan domain.Message {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
@@ -32,7 +32,7 @@ func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) <-chan domain.
 	go func() {
 		defer mr.wg.Done()
 		defer close(msgCh)
-		<-mr.stopCh
+		<-ctx.Done()
 	}()
 
 	return msgCh
@@ -42,44 +42,53 @@ func (mr *DefaultMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
 
-func (mr *DefaultMessageRelayer) Start() {
-	for {
-		select {
-		case <-mr.stopCh:
-			return
-		default:
-			msg, err := mr.network.Read()
-			if err != nil {
-				select {
-				case mr.errorCh <- err:
-				default:
-					utils.DPrintf("no error subscribers")
-				}
+func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
+	terminated := make(chan struct{})
 
-				if errors.Is(err, errs.FatalSocketError{}) {
-					utils.DPrintf("%s\n", err.Error())
-					if err := mr.network.Restart(); err != nil {
-						log.Fatal(err)
+	go func() {
+		defer close(terminated)
+		defer mr.wg.Wait()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				msg, err := mr.network.Read()
+				if err != nil {
+					select {
+					case mr.errorCh <- err:
+					default:
+						utils.DPrintf("no error subscribers")
 					}
+
+					if errors.Is(err, errs.FatalSocketError{}) {
+						utils.DPrintf("%s\n", err.Error())
+						if err := mr.network.Restart(); err != nil {
+							log.Fatal(err)
+						}
+					}
+
+					continue
 				}
 
-				continue
+				utils.DPrintf("relaying message of type %s\n", msg.Type)
+				mr.Relay(ctx, *msg)
 			}
-
-			utils.DPrintf("relaying message of type %s\n", msg.Type)
-			mr.Relay(*msg)
 		}
-	}
+	}()
+
+	return terminated
 }
 
-func (mr *DefaultMessageRelayer) Relay(msg domain.Message) {
+func (mr *DefaultMessageRelayer) Relay(ctx context.Context, msg domain.Message) {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
 
 	msgType := msg.Type
 	for _, sub := range mr.subscribers[msgType] {
 		select {
-		case <-mr.stopCh:
+		case <-ctx.Done():
 			return
 		default:
 			mr.wg.Add(1)
@@ -88,7 +97,7 @@ func (mr *DefaultMessageRelayer) Relay(msg domain.Message) {
 				select {
 				case sub.msgCh <- msg:
 					utils.DPrintf("%s received message of type %s\n", sub.ID.String(), msg.Type)
-				case <-mr.stopCh:
+				case <-ctx.Done():
 				default:
 					utils.DPrintf("%s is busy, dropping message of type %s\n", sub.ID.String(), msg.Type)
 				}
@@ -97,29 +106,11 @@ func (mr *DefaultMessageRelayer) Relay(msg domain.Message) {
 	}
 }
 
-func (mr *DefaultMessageRelayer) Stop() {
-	mr.mu.Lock()
-	defer mr.mu.Unlock()
-
-	select {
-	case <-mr.stopCh:
-		return
-	default:
-		utils.DPrintf("starting graceful shutdown\n")
-		close(mr.stopCh)
-		utils.DPrintf("waiting on children routines\n")
-		mr.wg.Wait()
-		close(mr.errorCh)
-		utils.DPrintf("relayer is closed\n")
-	}
-}
-
 func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayerServer {
 	return &DefaultMessageRelayer{
 		network:     n,
 		subscribers: make(map[domain.MessageType][]*SubscriberAddress),
 		errorCh:     make(chan error),
-		stopCh:      make(chan struct{}),
 		mu:          &sync.RWMutex{},
 		wg:          &sync.WaitGroup{},
 	}
