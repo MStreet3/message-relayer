@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
 	"github.com/mstreet3/message-relayer/lruCache"
@@ -15,7 +16,7 @@ import (
 
 type PriorityMessageRelayer struct {
 	network     network.RestartNetworkReader
-	subscribers map[domain.MessageType][]MessageObserver
+	subscribers map[domain.MessageType]map[string]MessageObserver
 	queues      map[domain.MessageType]lruCache.PriorityQueue
 	errorCh     chan error
 	stopCh      chan struct{}
@@ -23,22 +24,49 @@ type PriorityMessageRelayer struct {
 	wg          *sync.WaitGroup
 }
 
-func (mr *PriorityMessageRelayer) Subscribe(ctx context.Context, mt domain.MessageType) <-chan domain.Message {
+func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
-	msgCh := make(chan domain.Message)
-	sa := NewSubscriberAddress(msgCh)
-	mr.subscribers[mt] = append(mr.subscribers[mt], sa)
+	var (
+		cleanupCh = make(chan struct{})
+		msgCh     = make(chan domain.Message, 1)
+		id        = uuid.New()
+		handler   = func(msg domain.Message) {
+			select {
+			case <-mr.stopCh:
+				utils.DPrintf("%s: received stop signal", id)
+			case msgCh <- msg:
+				utils.DPrintf("%s: received message", id)
+			default:
+				utils.DPrintf("%s: dropped message", id)
+			}
+		}
+		sa = NewSubscriberAddress(id, handler)
+	)
+
+	if _, ok := mr.subscribers[mt]; !ok {
+		mr.subscribers[mt] = make(map[string]MessageObserver)
+	}
+
+	mr.subscribers[mt][id.String()] = sa
 
 	mr.wg.Add(1)
 	go func() {
 		defer mr.wg.Done()
 		defer close(msgCh)
-		<-ctx.Done()
+		select {
+		case <-mr.stopCh:
+			utils.DPrintf("%s: received stop signal, closing chan", id)
+		case <-cleanupCh:
+			utils.DPrintf("%s: received cleanup signal, closing chan", id)
+		}
 	}()
 
-	return msgCh
+	return msgCh, func() {
+		defer close(cleanupCh)
+		delete(mr.subscribers[mt], id.String())
+	}
 }
 
 func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
@@ -142,7 +170,7 @@ func (mr *PriorityMessageRelayer) Relay(msg domain.Message) {
 		case <-mr.stopCh:
 			return
 		default:
-			_ = sub.Observe(context.Background(), msg)
+			_ = sub.Observe(msg)
 		}
 	}
 }
@@ -160,7 +188,7 @@ func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRe
 
 	return &PriorityMessageRelayer{
 		network:     n,
-		subscribers: make(map[domain.MessageType][]MessageObserver),
+		subscribers: make(map[domain.MessageType]map[string]MessageObserver),
 		queues:      queues,
 		errorCh:     make(chan error),
 		stopCh:      make(chan struct{}),

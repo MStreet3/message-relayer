@@ -1,35 +1,26 @@
 package relayer
 
 import (
-	"context"
-
 	"github.com/google/uuid"
 	"github.com/mstreet3/message-relayer/domain"
-	"github.com/mstreet3/message-relayer/utils"
 )
 
 type MessageObserver interface {
-	Observe(context.Context, domain.Message) error
+	Observe(domain.Message) error
 }
 type SubscriberAddress struct {
-	msgCh chan<- domain.Message
-	ID    uuid.UUID
+	ID uuid.UUID
+	f  func(domain.Message)
 }
 
-func NewSubscriberAddress(ch chan<- domain.Message) MessageObserver {
+func NewSubscriberAddress(id uuid.UUID, f func(domain.Message)) MessageObserver {
 	return &SubscriberAddress{
-		msgCh: ch,
-		ID:    uuid.New(),
+		f:  f,
+		ID: id,
 	}
 }
 
-func (sa *SubscriberAddress) Observe(ctx context.Context, msg domain.Message) error {
-	select {
-	case sa.msgCh <- msg:
-		utils.DPrintf("%s received message of type %s\n", sa.ID.String(), msg.Type)
-	case <-ctx.Done():
-	default:
-		utils.DPrintf("%s is busy, dropping message of type %s\n", sa.ID.String(), msg.Type)
-	}
+func (sa *SubscriberAddress) Observe(msg domain.Message) error {
+	sa.f(msg)
 	return nil
 }

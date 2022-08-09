@@ -26,35 +26,51 @@ func NewApplication(
 	}
 }
 
-/*
-a basic example of how a subscriber could use the
-message relayer.
-*/
-func (a *Application) Start(ctx context.Context) <-chan struct{} {
+// a basic example of how a subscriber could use the
+// message relayer.
+func (app *Application) Start(ctx context.Context) <-chan struct{} {
 	var (
 		ctxwc, cancel = context.WithCancel(ctx)
-		terminated    = make(chan struct{})
-		stopped       = a.relayer.Start(ctx)
+		listening     = make(chan struct{})
+		n             = 5 // take 5
+		relaying      = app.relayer.Start(ctxwc)
+		shutdown      = make(chan struct{})
 	)
 
+	// listen for messages
 	go func() {
-		defer cancel()
-		a.listen(ctxwc)
+		defer close(listening)
+		doneRA := app.listen(ctxwc, n, domain.ReceivedAnswer)
+		doneSNR := app.listen(ctxwc, n, domain.StartNewRound)
+		<-doneRA
+		<-doneSNR
 	}()
 
+	// handle graceful shutdown
 	go func() {
-		defer close(terminated)
-		<-stopped
+		defer close(shutdown)
+		<-listening
+		cancel()
+		<-relaying
 	}()
 
-	return terminated
+	return shutdown
 }
 
-func (a *Application) listen(ctx context.Context) {
+// listen blocks to hear n messages of type ReceivedAnswer
+func (app *Application) listen(ctx context.Context, n int, mt domain.MessageType) <-chan struct{} {
 	var (
-		l    = a.relayer.Subscribe(ctx, domain.ReceivedAnswer)
-		done = utils.Take(ctx.Done(), l, 5)
+		l, cleanup = app.relayer.Subscribe(mt)
+		taking     = utils.Take(ctx.Done(), l, n)
+		done       = make(chan struct{})
 	)
 
-	<-done
+	// take until done
+	go func() {
+		defer close(done)
+		defer cleanup()
+		<-taking
+	}()
+
+	return done
 }

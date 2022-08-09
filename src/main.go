@@ -19,6 +19,11 @@ var responses = []network.NetworkResponse{
 			Type: domain.ReceivedAnswer,
 		},
 	},
+	{
+		Message: &domain.Message{
+			Type: domain.StartNewRound,
+		},
+	},
 }
 
 func main() {

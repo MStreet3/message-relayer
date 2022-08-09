@@ -7,7 +7,7 @@ import (
 )
 
 type Subscriber interface {
-	Subscribe(context.Context, domain.MessageType) <-chan domain.Message
+	Subscribe(domain.MessageType) (<-chan domain.Message, func())
 }
 type MessageRelayer interface {
 	Subscriber
