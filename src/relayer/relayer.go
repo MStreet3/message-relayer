@@ -6,6 +6,9 @@ import (
 	"github.com/mstreet3/message-relayer/domain"
 )
 
+type Relayer interface {
+	Relay(stop <-chan struct{}, msg domain.Message)
+}
 type Subscriber interface {
 	Subscribe(domain.MessageType) (<-chan domain.Message, func())
 }
