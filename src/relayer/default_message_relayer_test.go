@@ -31,8 +31,8 @@ func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 	terminated := mr.Start(ctx)
 
 	// subscribe to the relayer
-	snrCh := mr.Subscribe(ctx, domain.StartNewRound)
-	raCh := mr.Subscribe(ctx, domain.ReceivedAnswer)
+	snrCh, _ := mr.Subscribe(domain.StartNewRound)
+	raCh, _ := mr.Subscribe(domain.ReceivedAnswer)
 
 	/* actions */
 	wg.Add(1)

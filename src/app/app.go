@@ -9,41 +9,68 @@ import (
 	"github.com/mstreet3/message-relayer/utils"
 )
 
-/*
-a basic example of how a subscriber could use the
-message relayer.
-*/
-func Start(ctx context.Context) <-chan struct{} {
-	terminated := make(chan struct{})
-
-	go func() {
-		defer close(terminated)
-		run(ctx)
-	}()
-
-	return terminated
+type Application struct {
+	network  network.RestartNetworkReader
+	relayer  relayer.MessageRelayerServer
+	services []<-chan struct{}
 }
 
-func run(ctx context.Context) {
+func NewApplication(
+	n network.RestartNetworkReader,
+	r relayer.MessageRelayerServer,
+) *Application {
+	return &Application{
+		network:  n,
+		relayer:  r,
+		services: make([]<-chan struct{}, 0),
+	}
+}
+
+// a basic example of how a subscriber could use the
+// message relayer.
+func (app *Application) Start(ctx context.Context) <-chan struct{} {
 	var (
 		ctxwc, cancel = context.WithCancel(ctx)
-		responses     = []network.NetworkResponse{
-			{
-				Message: &domain.Message{
-					Type: domain.ReceivedAnswer,
-				},
-			},
-		}
-		ns = network.NewNetworkSocketStub(responses)
-		mr = relayer.NewDefaultMessageRelayer(ns)
+		listening     = make(chan struct{})
+		n             = 5 // take 5
+		relaying      = app.relayer.Start(ctxwc)
+		shutdown      = make(chan struct{})
 	)
 
-	stopped := mr.Start(ctxwc)
+	// listen for messages
+	go func() {
+		defer close(listening)
+		doneRA := app.listen(ctxwc, n, domain.ReceivedAnswer)
+		doneSNR := app.listen(ctxwc, n, domain.StartNewRound)
+		<-doneRA
+		<-doneSNR
+	}()
 
-	l := mr.Subscribe(ctxwc, domain.ReceivedAnswer)
+	// handle graceful shutdown
+	go func() {
+		defer close(shutdown)
+		<-listening
+		cancel()
+		<-relaying
+	}()
 
-	done := utils.Take(ctx.Done(), l, 500)
-	<-done
-	cancel()
-	<-stopped
+	return shutdown
+}
+
+// listen blocks to hear n messages of type ReceivedAnswer
+func (app *Application) listen(ctx context.Context, n int, mt domain.MessageType) <-chan struct{} {
+	var (
+		l, cleanup = app.relayer.Subscribe(mt)
+		taking     = utils.Take(ctx.Done(), l, n)
+		done       = make(chan struct{})
+	)
+
+	// take until done
+	go func() {
+		defer close(done)
+		defer cleanup()
+		<-taking
+	}()
+
+	return done
 }

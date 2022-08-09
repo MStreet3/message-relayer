@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"container/list"
 	"log"
 )
 
@@ -22,6 +23,30 @@ func Take[T interface{}](stop <-chan struct{}, ch <-chan T, n int) <-chan struct
 			case <-stop:
 				return
 			case <-ch:
+			}
+		}
+	}()
+	return done
+}
+
+func AllClosed[T interface{}](stop <-chan struct{}, chs []<-chan T) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		list := list.New()
+
+		for ch := range chs {
+			list.PushFront(ch)
+		}
+
+		for e := list.Front(); e != nil; e.Next() {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if _, open := <-e.Value.(<-chan T); !open {
+				list.Remove(e)
 			}
 		}
 	}()
