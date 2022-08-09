@@ -40,10 +40,10 @@ func (app *Application) Start(ctx context.Context) <-chan struct{} {
 	// listen for messages
 	go func() {
 		defer close(listening)
-		doneRA := app.listen(ctxwc, n, domain.ReceivedAnswer)
-		doneSNR := app.listen(ctxwc, n, domain.StartNewRound)
-		<-doneRA
-		<-doneSNR
+		ra := app.listen(ctxwc, n, domain.ReceivedAnswer)
+		snr := app.listen(ctxwc, n, domain.StartNewRound)
+		<-ra
+		<-snr
 	}()
 
 	// handle graceful shutdown

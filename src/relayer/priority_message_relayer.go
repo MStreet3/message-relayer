@@ -6,7 +6,6 @@ import (
 	"log"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
 	"github.com/mstreet3/message-relayer/lruCache"
@@ -15,58 +14,24 @@ import (
 )
 
 type PriorityMessageRelayer struct {
-	network     network.RestartNetworkReader
-	subscribers map[domain.MessageType]map[string]MessageObserver
-	queues      map[domain.MessageType]lruCache.PriorityQueue
-	errorCh     chan error
-	stopCh      chan struct{}
-	mu          *sync.RWMutex
-	wg          *sync.WaitGroup
+	sm      *subscriptionManager
+	network network.RestartNetworkReader
+	queues  map[domain.MessageType]lruCache.PriorityQueue
+	errorCh chan error
+	stopCh  chan struct{}
+	mu      sync.Mutex
+	wg      sync.WaitGroup
 }
 
 func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
-	mr.mu.Lock()
-	defer mr.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
 
-	var (
-		cleanupCh = make(chan struct{})
-		msgCh     = make(chan domain.Message, 1)
-		id        = uuid.New()
-		handler   = func(msg domain.Message) {
-			select {
-			case <-mr.stopCh:
-				utils.DPrintf("%s: received stop signal", id)
-			case msgCh <- msg:
-				utils.DPrintf("%s: received message", id)
-			default:
-				utils.DPrintf("%s: dropped message", id)
-			}
-		}
-		sa = NewSubscriberAddress(id, handler)
-	)
-
-	if _, ok := mr.subscribers[mt]; !ok {
-		mr.subscribers[mt] = make(map[string]MessageObserver)
-	}
-
-	mr.subscribers[mt][id.String()] = sa
-
-	mr.wg.Add(1)
 	go func() {
-		defer mr.wg.Done()
-		defer close(msgCh)
-		select {
-		case <-mr.stopCh:
-			utils.DPrintf("%s: received stop signal, closing chan", id)
-		case <-cleanupCh:
-			utils.DPrintf("%s: received cleanup signal, closing chan", id)
-		}
+		defer cancel()
+		<-mr.stopCh
 	}()
 
-	return msgCh, func() {
-		defer close(cleanupCh)
-		delete(mr.subscribers[mt], id.String())
-	}
+	return mr.sm.Subscribe(ctx, mt)
 }
 
 func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
@@ -74,6 +39,9 @@ func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 
 	go func() {
 		defer close(terminated)
+		defer mr.sm.Wait()
+		defer close(mr.stopCh)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -134,8 +102,15 @@ func (mr *PriorityMessageRelayer) DequeueAndRelay() {
 }
 
 func (mr *PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		defer cancel()
+		<-mr.stopCh
+	}()
+
 	for msg := range ch {
-		mr.Relay(msg)
+		mr.sm.Relay(ctx, msg)
 	}
 }
 
@@ -160,21 +135,6 @@ func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
 	return sendCh
 }
 
-func (mr *PriorityMessageRelayer) Relay(msg domain.Message) {
-	mr.mu.RLock()
-	defer mr.mu.RUnlock()
-
-	msgType := msg.Type
-	for _, sub := range mr.subscribers[msgType] {
-		select {
-		case <-mr.stopCh:
-			return
-		default:
-			_ = sub.Observe(msg)
-		}
-	}
-}
-
 func (mr *PriorityMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
@@ -187,12 +147,11 @@ func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRe
 	}
 
 	return &PriorityMessageRelayer{
-		network:     n,
-		subscribers: make(map[domain.MessageType]map[string]MessageObserver),
-		queues:      queues,
-		errorCh:     make(chan error),
-		stopCh:      make(chan struct{}),
-		mu:          &sync.RWMutex{},
-		wg:          &sync.WaitGroup{},
+		network: n,
+		queues:  queues,
+		errorCh: make(chan error),
+		stopCh:  make(chan struct{}),
+		mu:      sync.Mutex{},
+		wg:      sync.WaitGroup{},
 	}
 }

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"container/list"
+	"context"
 	"log"
 )
 
@@ -51,4 +52,18 @@ func AllClosed[T interface{}](stop <-chan struct{}, chs []<-chan T) <-chan struc
 		}
 	}()
 	return done
+}
+
+func CtxOrDone(ctx context.Context, done <-chan struct{}) <-chan struct{} {
+	terminated := make(chan struct{})
+	go func() {
+		defer close(terminated)
+		select {
+		case <-ctx.Done():
+			return
+		case <-done:
+			return
+		}
+	}()
+	return terminated
 }
