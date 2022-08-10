@@ -49,8 +49,8 @@ func (app *Application) Start(ctx context.Context) <-chan struct{} {
 	// handle graceful shutdown
 	go func() {
 		defer close(shutdown)
-		defer cancel()
 		<-listening
+		cancel()
 		<-relaying
 	}()
 
