@@ -13,8 +13,8 @@ import (
 	"github.com/mstreet3/message-relayer/utils"
 )
 
-type PriorityMessageRelayer struct {
-	sm      *subscriptionManager
+type priorityMessageRelayer struct {
+	om      *observerManager
 	network network.RestartNetworkReader
 	queues  map[domain.MessageType]lruCache.PriorityQueue
 	errorCh chan error
@@ -23,7 +23,7 @@ type PriorityMessageRelayer struct {
 	wg      sync.WaitGroup
 }
 
-func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
+func (mr *priorityMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
@@ -31,15 +31,15 @@ func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domai
 		<-mr.stopCh
 	}()
 
-	return mr.sm.Subscribe(ctx, mt)
+	return mr.om.Subscribe(ctx, mt)
 }
 
-func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
+func (mr *priorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 	terminated := make(chan struct{})
 
 	go func() {
 		defer close(terminated)
-		defer mr.sm.Wait()
+		defer mr.om.Close()
 		defer close(mr.stopCh)
 
 		for {
@@ -82,7 +82,7 @@ func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 	return terminated
 }
 
-func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
+func (mr *priorityMessageRelayer) Enqueue(msg domain.Message) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
@@ -96,12 +96,12 @@ func (mr *PriorityMessageRelayer) Enqueue(msg domain.Message) {
 	q.Push(msg)
 }
 
-func (mr *PriorityMessageRelayer) DequeueAndRelay() {
+func (mr *priorityMessageRelayer) DequeueAndRelay() {
 	ch := mr.Dequeue()
 	mr.Broadcast(ch)
 }
 
-func (mr *PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
+func (mr *priorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
@@ -110,11 +110,11 @@ func (mr *PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
 	}()
 
 	for msg := range ch {
-		mr.sm.Relay(ctx, msg)
+		mr.om.Notify(ctx, msg)
 	}
 }
 
-func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
+func (mr *priorityMessageRelayer) Dequeue() <-chan domain.Message {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
@@ -135,18 +135,18 @@ func (mr *PriorityMessageRelayer) Dequeue() <-chan domain.Message {
 	return sendCh
 }
 
-func (mr *PriorityMessageRelayer) Errors() <-chan error {
+func (mr *priorityMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
 
-func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRelayerServer {
+func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRelayer {
 	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
 	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
 	for _, t := range msgTypes {
 		queues[t] = lruCache.NewMessagePriorityQueue(domain.PriorityQueueCapacity)
 	}
 
-	return &PriorityMessageRelayer{
+	return &priorityMessageRelayer{
 		network: n,
 		queues:  queues,
 		errorCh: make(chan error),
