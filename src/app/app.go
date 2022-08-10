@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"time"
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/network"
@@ -50,12 +49,9 @@ func (app *Application) Start(ctx context.Context) <-chan struct{} {
 	// handle graceful shutdown
 	go func() {
 		defer close(shutdown)
+		defer cancel()
 		<-listening
-		cancel()
-		select {
-		case <-relaying:
-		case <-time.After(3 * time.Second):
-		}
+		<-relaying
 	}()
 
 	return shutdown
