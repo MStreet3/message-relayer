@@ -39,7 +39,7 @@ func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 
 	go func() {
 		defer close(terminated)
-		defer mr.sm.Wait()
+		defer mr.sm.Close()
 		defer close(mr.stopCh)
 
 		for {
@@ -110,7 +110,7 @@ func (mr *PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
 	}()
 
 	for msg := range ch {
-		mr.sm.Relay(ctx, msg)
+		mr.sm.Notify(ctx, msg)
 	}
 }
 

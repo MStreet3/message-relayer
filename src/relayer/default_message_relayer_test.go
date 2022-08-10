@@ -2,7 +2,6 @@ package relayer
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/mstreet3/message-relayer/domain"
@@ -12,7 +11,6 @@ import (
 
 func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 	var (
-		wg          sync.WaitGroup
 		ctx, cancel = context.WithCancel(context.Background())
 		responses   = []network.NetworkResponse{
 			StartNewRoundResponse,
@@ -35,9 +33,7 @@ func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 	raCh, _ := mr.Subscribe(domain.ReceivedAnswer)
 
 	/* actions */
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		defer cancel()
 		for {
 			select {
@@ -55,7 +51,8 @@ func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
 			}
 		}
 	}()
-	wg.Wait()
+
+	<-terminated
 
 	// assertions
 	require.Equal(t, wantSNR, gotSNR)

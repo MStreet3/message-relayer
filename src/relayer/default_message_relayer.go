@@ -14,19 +14,11 @@ import (
 type DefaultMessageRelayer struct {
 	sm      SubscriptionManager
 	network network.RestartNetworkReader
-	errorCh chan error
-	stopCh  chan struct{}
+	errorCh <-chan error
 }
 
 func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		defer cancel()
-		<-mr.stopCh
-	}()
-
-	return mr.sm.Subscribe(ctx, mt)
+	return mr.sm.Subscribe(context.Background(), mt)
 }
 
 func (mr *DefaultMessageRelayer) Errors() <-chan error {
@@ -34,13 +26,37 @@ func (mr *DefaultMessageRelayer) Errors() <-chan error {
 }
 
 func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
-	terminated := make(chan struct{})
+	var (
+		ctxwc, cancel         = context.WithCancel(ctx)
+		terminated            = make(chan struct{})
+		reading, msgCh, errCh = mr.read(ctxwc)
+		relaying              = mr.relay(ctxwc, msgCh)
+	)
+
+	mr.errorCh = errCh
 
 	go func() {
 		defer close(terminated)
-		defer mr.sm.Wait()
-		defer close(mr.stopCh)
+		defer mr.sm.Close()
+		defer cancel()
+		<-reading
+		<-relaying
+	}()
 
+	return terminated
+}
+
+func (mr *DefaultMessageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan domain.Message, <-chan error) {
+	var (
+		msgCh = make(chan domain.Message)
+		errCh = make(chan error)
+		done  = make(chan struct{})
+	)
+
+	go func() {
+		defer close(done)
+		defer close(msgCh)
+		defer close(errCh)
 		for {
 			select {
 			case <-ctx.Done():
@@ -49,15 +65,16 @@ func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 				msg, err := mr.network.Read()
 				if err != nil {
 					select {
-					case mr.errorCh <- err:
+					case errCh <- err:
 					default:
 						utils.DPrintf("no error subscribers")
 					}
 
 					if errors.Is(err, errs.FatalSocketError{}) {
 						utils.DPrintf("%s\n", err.Error())
-						if err := mr.network.Restart(); err != nil {
-							log.Fatal(err)
+
+						if rerr := mr.network.Restart(); rerr != nil {
+							log.Fatal(rerr)
 						}
 					}
 
@@ -65,30 +82,42 @@ func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 				}
 
 				utils.DPrintf("relaying message of type %s\n", msg.Type)
-				mr.Relay(ctx, *msg)
+				select {
+				case msgCh <- *msg:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
 
-	return terminated
+	return done, msgCh, errCh
 }
 
-func (mr *DefaultMessageRelayer) Relay(ctx context.Context, msg domain.Message) {
-	ctxwc, cancel := context.WithCancel(ctx)
+func (mr *DefaultMessageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {
+	done := make(chan struct{})
 
 	go func() {
-		defer cancel()
-		<-utils.CtxOrDone(ctxwc, mr.stopCh)
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, open := <-msgCh:
+				if !open {
+					return
+				}
+				mr.sm.Notify(ctx, msg)
+			}
+		}
 	}()
 
-	mr.sm.Relay(ctxwc, msg)
+	return done
 }
 
 func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayerServer {
 	return &DefaultMessageRelayer{
 		network: n,
 		sm:      NewSubscriptionManager(),
-		errorCh: make(chan error),
-		stopCh:  make(chan struct{}),
 	}
 }

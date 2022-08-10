@@ -5,22 +5,24 @@ import (
 	"github.com/mstreet3/message-relayer/domain"
 )
 
-type MessageObserver interface {
-	Observe(domain.Message) error
-}
-type SubscriberAddress struct {
-	ID uuid.UUID
-	f  func(domain.Message)
+type Observer[T interface{}] interface {
+	Observe(T) error
 }
 
-func NewSubscriberAddress(id uuid.UUID, f func(domain.Message)) MessageObserver {
-	return &SubscriberAddress{
-		f:  f,
-		ID: id,
+type MessageObserver Observer[domain.Message]
+type MessageHandler func(domain.Message) error
+type messageObserver struct {
+	ID     uuid.UUID
+	handle MessageHandler
+}
+
+func NewMessageObserver(id uuid.UUID, f MessageHandler) MessageObserver {
+	return &messageObserver{
+		handle: f,
+		ID:     id,
 	}
 }
 
-func (sa *SubscriberAddress) Observe(msg domain.Message) error {
-	sa.f(msg)
-	return nil
+func (mo *messageObserver) Observe(msg domain.Message) error {
+	return mo.handle(msg)
 }
