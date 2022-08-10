@@ -9,21 +9,21 @@ import (
 	"github.com/mstreet3/message-relayer/utils"
 )
 
-type SubscriptionManager interface {
+type ObserverManager interface {
 	Subscribe(ctx context.Context, mt domain.MessageType) (<-chan domain.Message, func())
 	Notify(ctx context.Context, msg domain.Message)
 	Close()
 }
 
-type subscriptionManager struct {
+type observerManager struct {
 	subscribers map[domain.MessageType]map[string]MessageObserver
 	stopCh      chan struct{}
 	mu          sync.Mutex
 	wg          sync.WaitGroup
 }
 
-func NewSubscriptionManager() SubscriptionManager {
-	return &subscriptionManager{
+func NewObserverManager() ObserverManager {
+	return &observerManager{
 		mu:          sync.Mutex{},
 		wg:          sync.WaitGroup{},
 		stopCh:      make(chan struct{}),
@@ -31,7 +31,7 @@ func NewSubscriptionManager() SubscriptionManager {
 	}
 }
 
-func (sm *subscriptionManager) Subscribe(ctx context.Context, mt domain.MessageType) (<-chan domain.Message, func()) {
+func (sm *observerManager) Subscribe(ctx context.Context, mt domain.MessageType) (<-chan domain.Message, func()) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -77,7 +77,7 @@ func (sm *subscriptionManager) Subscribe(ctx context.Context, mt domain.MessageT
 	}
 }
 
-func (sm *subscriptionManager) Notify(ctx context.Context, msg domain.Message) {
+func (sm *observerManager) Notify(ctx context.Context, msg domain.Message) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -101,12 +101,12 @@ func (sm *subscriptionManager) Notify(ctx context.Context, msg domain.Message) {
 	}
 }
 
-func (sm *subscriptionManager) Close() {
+func (sm *observerManager) Close() {
 	defer sm.wg.Wait()
 	close(sm.stopCh)
 }
 
-func (sm *subscriptionManager) remove(mt domain.MessageType, uuid uuid.UUID) {
+func (sm *observerManager) remove(mt domain.MessageType, uuid uuid.UUID) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 

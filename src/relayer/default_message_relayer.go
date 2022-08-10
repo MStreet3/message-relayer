@@ -12,13 +12,13 @@ import (
 )
 
 type DefaultMessageRelayer struct {
-	sm      SubscriptionManager
+	om      ObserverManager
 	network network.RestartNetworkReader
 	errorCh <-chan error
 }
 
 func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
-	return mr.sm.Subscribe(context.Background(), mt)
+	return mr.om.Subscribe(context.Background(), mt)
 }
 
 func (mr *DefaultMessageRelayer) Errors() <-chan error {
@@ -37,7 +37,7 @@ func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 
 	go func() {
 		defer close(terminated)
-		defer mr.sm.Close()
+		defer mr.om.Close()
 		defer cancel()
 		<-reading
 		<-relaying
@@ -107,7 +107,7 @@ func (mr *DefaultMessageRelayer) relay(ctx context.Context, msgCh <-chan domain.
 				if !open {
 					return
 				}
-				mr.sm.Notify(ctx, msg)
+				mr.om.Notify(ctx, msg)
 			}
 		}
 	}()
@@ -118,6 +118,6 @@ func (mr *DefaultMessageRelayer) relay(ctx context.Context, msgCh <-chan domain.
 func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayerServer {
 	return &DefaultMessageRelayer{
 		network: n,
-		sm:      NewSubscriptionManager(),
+		om:      NewObserverManager(),
 	}
 }

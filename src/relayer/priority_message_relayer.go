@@ -14,7 +14,7 @@ import (
 )
 
 type PriorityMessageRelayer struct {
-	sm      *subscriptionManager
+	om      *observerManager
 	network network.RestartNetworkReader
 	queues  map[domain.MessageType]lruCache.PriorityQueue
 	errorCh chan error
@@ -31,7 +31,7 @@ func (mr *PriorityMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domai
 		<-mr.stopCh
 	}()
 
-	return mr.sm.Subscribe(ctx, mt)
+	return mr.om.Subscribe(ctx, mt)
 }
 
 func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
@@ -39,7 +39,7 @@ func (mr *PriorityMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 
 	go func() {
 		defer close(terminated)
-		defer mr.sm.Close()
+		defer mr.om.Close()
 		defer close(mr.stopCh)
 
 		for {
@@ -110,7 +110,7 @@ func (mr *PriorityMessageRelayer) Broadcast(ch <-chan domain.Message) {
 	}()
 
 	for msg := range ch {
-		mr.sm.Notify(ctx, msg)
+		mr.om.Notify(ctx, msg)
 	}
 }
 
