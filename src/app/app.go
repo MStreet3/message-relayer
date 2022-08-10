@@ -12,13 +12,13 @@ import (
 
 type Application struct {
 	network  network.RestartNetworkReader
-	relayer  relayer.MessageRelayerServer
+	relayer  relayer.MessageRelayer
 	services []<-chan struct{}
 }
 
 func NewApplication(
 	n network.RestartNetworkReader,
-	r relayer.MessageRelayerServer,
+	r relayer.MessageRelayer,
 ) *Application {
 	return &Application{
 		network:  n,

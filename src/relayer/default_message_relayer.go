@@ -11,21 +11,20 @@ import (
 	"github.com/mstreet3/message-relayer/utils"
 )
 
-type DefaultMessageRelayer struct {
+type messageRelayer struct {
 	om      ObserverManager
 	network network.RestartNetworkReader
 	errorCh <-chan error
 }
 
-func (mr *DefaultMessageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
-	return mr.om.Subscribe(context.Background(), mt)
+func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayer {
+	return &messageRelayer{
+		network: n,
+		om:      NewObserverManager(),
+	}
 }
 
-func (mr *DefaultMessageRelayer) Errors() <-chan error {
-	return mr.errorCh
-}
-
-func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
+func (mr *messageRelayer) Start(ctx context.Context) <-chan struct{} {
 	var (
 		ctxwc, cancel         = context.WithCancel(ctx)
 		terminated            = make(chan struct{})
@@ -46,7 +45,15 @@ func (mr *DefaultMessageRelayer) Start(ctx context.Context) <-chan struct{} {
 	return terminated
 }
 
-func (mr *DefaultMessageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan domain.Message, <-chan error) {
+func (mr *messageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Message, func()) {
+	return mr.om.Subscribe(context.Background(), mt)
+}
+
+func (mr *messageRelayer) Errors() <-chan error {
+	return mr.errorCh
+}
+
+func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan domain.Message, <-chan error) {
 	var (
 		msgCh = make(chan domain.Message)
 		errCh = make(chan error)
@@ -94,7 +101,7 @@ func (mr *DefaultMessageRelayer) read(ctx context.Context) (<-chan struct{}, <-c
 	return done, msgCh, errCh
 }
 
-func (mr *DefaultMessageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {
+func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
@@ -113,11 +120,4 @@ func (mr *DefaultMessageRelayer) relay(ctx context.Context, msgCh <-chan domain.
 	}()
 
 	return done
-}
-
-func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayerServer {
-	return &DefaultMessageRelayer{
-		network: n,
-		om:      NewObserverManager(),
-	}
 }
