@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/mstreet3/message-relayer/utils"
 )
 
 func TestBatchProcessor(t *testing.T) {
@@ -26,12 +28,12 @@ func TestBatchProcessor(t *testing.T) {
 				if !ok {
 					return
 				}
+				utils.DPrintf(e)
 				if strings.Contains(e, "procBatch: ran job") {
 					bp.Stop()
 				}
 			}
 		}
-
 	}()
 
 	bp.Process(job)
