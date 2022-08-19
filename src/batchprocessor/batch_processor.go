@@ -2,6 +2,7 @@ package batchprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -33,8 +34,8 @@ func (b Batch) String() string {
 
 type BatchProcessor interface {
 	Start(context.Context) <-chan struct{}
-	Stop()
-	Process(Job)
+	Stop() error
+	Process(Job) error
 	Events() <-chan string
 }
 
@@ -82,19 +83,20 @@ func (bp *batchProcessor) Start(ctx context.Context) <-chan struct{} {
 	return stopped
 }
 
-func (bp *batchProcessor) Stop() {
+func (bp *batchProcessor) Stop() error {
 	select {
 	case <-bp.stopCh:
-		return
+		return errors.New("batch processor is stopped")
 	default:
 		close(bp.stopCh)
+		return nil
 	}
 }
 
-func (bp *batchProcessor) Process(j Job) {
+func (bp *batchProcessor) Process(j Job) error {
 	select {
 	case <-bp.stopCh:
-		return
+		return errors.New("batch processor is stopped")
 	case bp.jobCh <- j:
 		var (
 			ctxwc, cancel = context.WithCancel(context.Background())
@@ -110,7 +112,8 @@ func (bp *batchProcessor) Process(j Job) {
 			}
 		}()
 
-		bp.notify(ctxwc, "job sent to process")
+		bp.notify(ctxwc, fmt.Sprintf("process: job sent %s", j.ID))
+		return nil
 	}
 }
 
@@ -138,6 +141,7 @@ func (bp *batchProcessor) batcher(ctx context.Context, jobs <-chan Job) (<-chan 
 				if !open {
 					return
 				}
+				batch[i] = job
 				if i == bp.size-1 {
 					select {
 					case <-ctx.Done():
@@ -148,8 +152,6 @@ func (bp *batchProcessor) batcher(ctx context.Context, jobs <-chan Job) (<-chan 
 					i = 0
 					continue
 				}
-
-				batch[i] = job
 				i++
 			}
 		}

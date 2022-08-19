@@ -2,10 +2,11 @@ package batchprocessor
 
 import (
 	"context"
-	"strings"
+	"fmt"
 	"testing"
 
 	"github.com/mstreet3/message-relayer/utils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBatchProcessor(t *testing.T) {
@@ -29,13 +30,15 @@ func TestBatchProcessor(t *testing.T) {
 					return
 				}
 				utils.DPrintf(e)
-				if strings.Contains(e, "procBatch: ran job") {
-					bp.Stop()
+				if e == fmt.Sprintf("procBatch: ran job %s", job.ID) {
+					err := bp.Stop()
+					require.NoError(t, err)
 				}
 			}
 		}
 	}()
 
-	bp.Process(job)
+	err := bp.Process(job)
+	require.NoError(t, err)
 	<-stopped
 }
