@@ -32,16 +32,15 @@ func NewObserverManager() ObserverManager {
 }
 
 func (sm *observerManager) Subscribe(ctx context.Context, mt domain.MessageType) (<-chan domain.Message, func()) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	var (
 		cleanupCh = make(chan struct{})
+		unsubbed  = make(chan struct{})
 		msgCh     = make(chan domain.Message, 1)
 		id        = uuid.New()
+		stop      = utils.CtxOrDone(ctx, sm.stopCh)
 		handler   = func(msg domain.Message) error {
 			select {
-			case <-utils.CtxOrDone(ctx, sm.stopCh):
+			case <-stop:
 				utils.DPrintf("%s: received stop signal", id)
 			case msgCh <- msg:
 				utils.DPrintf("%s: received message", id)
@@ -53,18 +52,17 @@ func (sm *observerManager) Subscribe(ctx context.Context, mt domain.MessageType)
 		mo = NewMessageObserver(id, handler)
 	)
 
-	if _, ok := sm.subscribers[mt]; !ok {
-		sm.subscribers[mt] = make(map[string]MessageObserver)
-	}
+	// add message observer to subscriber map
+	sm.add(mt, id, mo)
 
-	sm.subscribers[mt][id.String()] = mo
-
+	// listen for signal to close sub channel
 	sm.wg.Add(1)
 	go func() {
 		defer sm.wg.Done()
+		defer close(unsubbed)
 		defer close(msgCh)
 		select {
-		case <-utils.CtxOrDone(ctx, sm.stopCh):
+		case <-stop:
 			utils.DPrintf("%s: received stop signal, closing chan", id)
 		case <-cleanupCh:
 			utils.DPrintf("%s: received cleanup signal, closing chan", id)
@@ -72,8 +70,9 @@ func (sm *observerManager) Subscribe(ctx context.Context, mt domain.MessageType)
 	}()
 
 	return msgCh, func() {
-		defer close(cleanupCh)
 		sm.remove(mt, id)
+		close(cleanupCh)
+		<-unsubbed
 	}
 }
 
@@ -81,17 +80,18 @@ func (sm *observerManager) Notify(ctx context.Context, msg domain.Message) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	stop := utils.CtxOrDone(ctx, sm.stopCh)
 	msgType := msg.Type
 	for _, sub := range sm.subscribers[msgType] {
 		select {
-		case <-ctx.Done():
+		case <-stop:
 			return
 		default:
 			sm.wg.Add(1)
 			go func(sub MessageObserver) {
 				defer sm.wg.Done()
 				select {
-				case <-ctx.Done():
+				case <-stop:
 					return
 				default:
 					_ = sub.Observe(msg)
@@ -104,6 +104,17 @@ func (sm *observerManager) Notify(ctx context.Context, msg domain.Message) {
 func (sm *observerManager) Close() {
 	defer sm.wg.Wait()
 	close(sm.stopCh)
+}
+
+func (sm *observerManager) add(mt domain.MessageType, id uuid.UUID, mo MessageObserver) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if _, ok := sm.subscribers[mt]; !ok {
+		sm.subscribers[mt] = make(map[string]MessageObserver)
+	}
+
+	sm.subscribers[mt][id.String()] = mo
 }
 
 func (sm *observerManager) remove(mt domain.MessageType, uuid uuid.UUID) {

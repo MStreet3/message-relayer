@@ -57,7 +57,7 @@ func (app *Application) Start(ctx context.Context) <-chan struct{} {
 	return shutdown
 }
 
-// listen blocks to hear n messages of type ReceivedAnswer
+// listen blocks to hear n messages
 func (app *Application) listen(ctx context.Context, n int, mt domain.MessageType) <-chan struct{} {
 	var (
 		l, cleanup = app.relayer.Subscribe(mt)
