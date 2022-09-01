@@ -35,7 +35,7 @@ func (sm *observerManager) Subscribe(ctx context.Context, mt domain.MessageType)
 	var (
 		cleanupCh = make(chan struct{})
 		unsubbed  = make(chan struct{})
-		msgCh     = make(chan domain.Message, 1)
+		msgCh     = make(chan domain.Message)
 		id        = uuid.New()
 		stop      = utils.CtxOrDone(ctx, sm.stopCh)
 		handler   = func(msg domain.Message) error {
@@ -43,9 +43,9 @@ func (sm *observerManager) Subscribe(ctx context.Context, mt domain.MessageType)
 			case <-stop:
 				utils.DPrintf("%s: received stop signal", id)
 			case msgCh <- msg:
-				utils.DPrintf("%s: received message", id)
+				utils.DPrintf("%s: received message of type %s", id, msg.Type)
 			default:
-				utils.DPrintf("%s: dropped message", id)
+				utils.DPrintf("%s: dropped message of type %s", id, msg.Type)
 			}
 			return nil
 		}
@@ -102,6 +102,7 @@ func (sm *observerManager) Notify(ctx context.Context, msg domain.Message) {
 }
 
 func (sm *observerManager) Close() {
+	defer utils.DPrintf("OM is shutdown")
 	defer sm.wg.Wait()
 	close(sm.stopCh)
 }

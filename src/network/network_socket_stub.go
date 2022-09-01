@@ -21,7 +21,7 @@ func (n *NetworkSocketStub) Read() (*domain.Message, error) {
 	if n.Cursor < len(n.Responses) {
 		<-time.After(30 * time.Millisecond)
 		response := n.Responses[n.Cursor]
-		response.Message.Timestamp = time.Now()
+		response.Message.Timestamp = time.Now().UTC().UnixNano()
 		n.Cursor++
 		return response.Message, response.Error
 	}

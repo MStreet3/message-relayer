@@ -24,3 +24,7 @@ var ReceivedAnswerResponse = network.NetworkResponse{Message: &domain.Message{
 var NetworkErrorResponse = network.NetworkResponse{
 	Error: errors.New("network unavailable"),
 }
+
+type testMailbox struct {
+	msgs []domain.Message
+}

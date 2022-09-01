@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"container/list"
 	"context"
 	"log"
 )
@@ -14,8 +13,8 @@ func DPrintf(format string, a ...interface{}) {
 	}
 }
 
-// Take reads n values from a channel or is stopped
-func Take[T interface{}](stop <-chan struct{}, ch <-chan T, n int) <-chan struct{} {
+// ReadN reads n values from a channel or is stopped
+func ReadN[T any](stop <-chan struct{}, ch <-chan T, n int) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -30,28 +29,25 @@ func Take[T interface{}](stop <-chan struct{}, ch <-chan T, n int) <-chan struct
 	return done
 }
 
-func AllClosed[T interface{}](stop <-chan struct{}, chs []<-chan T) <-chan struct{} {
-	done := make(chan struct{})
+func TakeN[T any](stop <-chan struct{}, ch <-chan T, n int) <-chan T {
+	taken := make(chan T)
+
 	go func() {
-		defer close(done)
-		list := list.New()
-
-		for ch := range chs {
-			list.PushFront(ch)
-		}
-
-		for e := list.Front(); e != nil; e.Next() {
+		defer close(taken)
+		for count := 0; count < n; count++ {
 			select {
 			case <-stop:
 				return
-			default:
-			}
-			if _, open := <-e.Value.(<-chan T); !open {
-				list.Remove(e)
+			case val, open := <-ch:
+				if !open {
+					return
+				}
+				taken <- val
 			}
 		}
 	}()
-	return done
+
+	return taken
 }
 
 func CtxOrDone(ctx context.Context, done <-chan struct{}) <-chan struct{} {

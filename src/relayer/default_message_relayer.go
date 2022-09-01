@@ -7,7 +7,6 @@ import (
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
-	"github.com/mstreet3/message-relayer/lrucache"
 	"github.com/mstreet3/message-relayer/network"
 	"github.com/mstreet3/message-relayer/utils"
 )
@@ -24,11 +23,15 @@ type messageRelayer struct {
 	errorCh <-chan error
 }
 
-func NewDefaultMessageRelayer(n network.RestartNetworkReader) *messageRelayer {
+func NewDefaultMessageRelayer(
+	n network.RestartNetworkReader,
+	mailbox mailbox[domain.Message],
+	om ObserverManager,
+) *messageRelayer {
 	return &messageRelayer{
 		network: n,
-		mailbox: lrucache.NewMessagePriorityQueue(1),
-		om:      NewObserverManager(),
+		mailbox: mailbox,
+		om:      om,
 	}
 }
 
@@ -63,29 +66,37 @@ func (mr *messageRelayer) Errors() <-chan error {
 
 func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan struct{}, <-chan error) {
 	var (
-		hb    = make(chan struct{}, 1)
-		errCh = make(chan error)
-		done  = make(chan struct{})
+		errCh     = make(chan error)
+		done      = make(chan struct{})
+		hb        = make(chan struct{}, 1)
+		sendPulse = func() {
+			select {
+			case hb <- struct{}{}:
+			default:
+			}
+		}
+		sendErr = func(err error) {
+			select {
+			case errCh <- err:
+			default:
+				utils.DPrintf("no error subscribers")
+			}
+		}
 	)
 
 	go func() {
 		defer close(done)
 		defer close(errCh)
-		defer close(hb)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				hb <- struct{}{}
+				sendPulse()
 
 				msg, err := mr.network.Read()
 				if err != nil {
-					select {
-					case errCh <- err:
-					default:
-						utils.DPrintf("no error subscribers")
-					}
+					sendErr(err)
 
 					if errors.Is(err, errs.FatalSocketError{}) {
 						utils.DPrintf("%s\n", err.Error())

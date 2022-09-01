@@ -9,7 +9,9 @@ import (
 
 	"github.com/mstreet3/message-relayer/app"
 	"github.com/mstreet3/message-relayer/domain"
+	"github.com/mstreet3/message-relayer/mailbox"
 	"github.com/mstreet3/message-relayer/network"
+	lifo "github.com/mstreet3/message-relayer/queues/lifoqueue"
 	"github.com/mstreet3/message-relayer/relayer"
 	"github.com/mstreet3/message-relayer/utils"
 )
@@ -31,7 +33,10 @@ func main() {
 	var (
 		ctxWithTimeout, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 		ns                     = network.NewNetworkSocketStub(responses)
-		mr                     = relayer.NewDefaultMessageRelayer(ns)
+		om                     = relayer.NewObserverManager()
+		lifo                   = lifo.NewLIFOQueue[domain.Message]()
+		mailbox                = mailbox.NewMessageMailbox(1, lifo, lifo)
+		mr                     = relayer.NewDefaultMessageRelayer(ns, mailbox, om)
 		interrupt              = make(chan os.Signal, 1)
 	)
 
