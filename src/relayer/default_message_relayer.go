@@ -7,29 +7,37 @@ import (
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
+	"github.com/mstreet3/message-relayer/lrucache"
 	"github.com/mstreet3/message-relayer/network"
 	"github.com/mstreet3/message-relayer/utils"
 )
 
+type mailbox[T any] interface {
+	Add(T)
+	Empty(context.Context) <-chan T
+}
+
 type messageRelayer struct {
 	om      ObserverManager
 	network network.RestartNetworkReader
+	mailbox mailbox[domain.Message]
 	errorCh <-chan error
 }
 
-func NewDefaultMessageRelayer(n network.RestartNetworkReader) MessageRelayer {
+func NewDefaultMessageRelayer(n network.RestartNetworkReader) *messageRelayer {
 	return &messageRelayer{
 		network: n,
+		mailbox: lrucache.NewMessagePriorityQueue(1),
 		om:      NewObserverManager(),
 	}
 }
 
 func (mr *messageRelayer) Start(ctx context.Context) <-chan struct{} {
 	var (
-		ctxwc, cancel         = context.WithCancel(ctx)
-		terminated            = make(chan struct{})
-		reading, msgCh, errCh = mr.read(ctxwc)
-		relaying              = mr.relay(ctxwc, msgCh)
+		ctxwc, cancel      = context.WithCancel(ctx)
+		terminated         = make(chan struct{})
+		reading, hb, errCh = mr.read(ctxwc)
+		checkingMsgs       = mr.checkMail(ctxwc, hb)
 	)
 
 	mr.errorCh = errCh
@@ -39,7 +47,7 @@ func (mr *messageRelayer) Start(ctx context.Context) <-chan struct{} {
 		defer mr.om.Close()
 		defer cancel()
 		<-reading
-		<-relaying
+		<-checkingMsgs
 	}()
 
 	return terminated
@@ -53,22 +61,24 @@ func (mr *messageRelayer) Errors() <-chan error {
 	return mr.errorCh
 }
 
-func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan domain.Message, <-chan error) {
+func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan struct{}, <-chan error) {
 	var (
-		msgCh = make(chan domain.Message)
+		hb    = make(chan struct{}, 1)
 		errCh = make(chan error)
 		done  = make(chan struct{})
 	)
 
 	go func() {
 		defer close(done)
-		defer close(msgCh)
 		defer close(errCh)
+		defer close(hb)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
+				hb <- struct{}{}
+
 				msg, err := mr.network.Read()
 				if err != nil {
 					select {
@@ -88,17 +98,31 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan dom
 					continue
 				}
 
-				utils.DPrintf("relaying message of type %s\n", msg.Type)
-				select {
-				case msgCh <- *msg:
-				case <-ctx.Done():
-					return
-				}
+				utils.DPrintf("placing message of type %s in mailbox\n", msg.Type)
+				mr.mailbox.Add(*msg)
 			}
 		}
 	}()
 
-	return done, msgCh, errCh
+	return done, hb, errCh
+}
+
+func (mr *messageRelayer) checkMail(ctx context.Context, hb <-chan struct{}) <-chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hb:
+				_ = mr.relay(ctx, mr.mailbox.Empty(ctx))
+			}
+		}
+	}()
+
+	return done
 }
 
 func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {

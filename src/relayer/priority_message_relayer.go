@@ -8,15 +8,19 @@ import (
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
-	"github.com/mstreet3/message-relayer/lruCache"
 	"github.com/mstreet3/message-relayer/network"
 	"github.com/mstreet3/message-relayer/utils"
 )
 
+type PriorityQueue[T any] interface {
+	Len() int
+	Pop() (*T, bool)
+	Push(T)
+}
 type priorityMessageRelayer struct {
 	om      *observerManager
 	network network.RestartNetworkReader
-	queues  map[domain.MessageType]lruCache.PriorityQueue
+	queues  map[domain.MessageType]PriorityQueue[domain.Message]
 	errorCh chan error
 	stopCh  chan struct{}
 	mu      sync.Mutex
@@ -86,7 +90,7 @@ func (mr *priorityMessageRelayer) Enqueue(msg domain.Message) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
-	var q lruCache.PriorityQueue
+	var q PriorityQueue[domain.Message]
 	switch msg.Type {
 	case domain.StartNewRound:
 		q = mr.queues[domain.StartNewRound]
@@ -137,21 +141,4 @@ func (mr *priorityMessageRelayer) Dequeue() <-chan domain.Message {
 
 func (mr *priorityMessageRelayer) Errors() <-chan error {
 	return mr.errorCh
-}
-
-func NewPriorityMessageRelayer(n network.RestartNetworkReader) PriorityMessageRelayer {
-	queues := make(map[domain.MessageType]lruCache.PriorityQueue)
-	msgTypes := []domain.MessageType{domain.StartNewRound, domain.ReceivedAnswer}
-	for _, t := range msgTypes {
-		queues[t] = lruCache.NewMessagePriorityQueue(domain.PriorityQueueCapacity)
-	}
-
-	return &priorityMessageRelayer{
-		network: n,
-		queues:  queues,
-		errorCh: make(chan error),
-		stopCh:  make(chan struct{}),
-		mu:      sync.Mutex{},
-		wg:      sync.WaitGroup{},
-	}
 }

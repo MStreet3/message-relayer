@@ -27,7 +27,7 @@ type Batch []Job
 func (b Batch) String() string {
 	out := make([]string, len(b))
 	for i, job := range b {
-		out[i] = fmt.Sprintf("%s", job.ID)
+		out[i] = job.ID.String()
 	}
 	return fmt.Sprintf("{ %s }", strings.Join(out, ","))
 }

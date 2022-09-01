@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/mstreet3/message-relayer/app"
 	"github.com/mstreet3/message-relayer/domain"
@@ -28,10 +29,10 @@ var responses = []network.NetworkResponse{
 
 func main() {
 	var (
-		ctxWithCancel, cancel = context.WithCancel(context.Background())
-		ns                    = network.NewNetworkSocketStub(responses)
-		mr                    = relayer.NewDefaultMessageRelayer(ns)
-		interrupt             = make(chan os.Signal, 1)
+		ctxWithTimeout, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		ns                     = network.NewNetworkSocketStub(responses)
+		mr                     = relayer.NewDefaultMessageRelayer(ns)
+		interrupt              = make(chan os.Signal, 1)
 	)
 
 	// Notify main of any interruptions
@@ -40,7 +41,7 @@ func main() {
 	application := app.NewApplication(ns, mr)
 
 	utils.DPrintf("starting the app")
-	stopped := application.Start(ctxWithCancel)
+	stopped := application.Start(ctxWithTimeout)
 
 	// Handle graceful shutdown
 	for {
