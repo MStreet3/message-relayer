@@ -14,5 +14,5 @@ type Emptier[T any] interface {
 type Stack[T any] interface {
 	Len() int
 	Pop() (*T, bool) // remove top item from stack
-	Push(T)          // place item on top of stack
+	PushFront(T)     // place item on top of stack
 }

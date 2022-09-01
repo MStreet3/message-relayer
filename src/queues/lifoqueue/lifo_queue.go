@@ -21,7 +21,7 @@ func (q *LIFOQueue[T]) Len() int {
 	return q.queue.Len()
 }
 
-func (q *LIFOQueue[T]) Push(msg T) {
+func (q *LIFOQueue[T]) PushFront(msg T) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -31,6 +31,7 @@ func (q *LIFOQueue[T]) Push(msg T) {
 func (q *LIFOQueue[T]) Pop() (*T, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+
 	return q.pop()
 }
 

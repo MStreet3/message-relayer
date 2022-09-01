@@ -9,19 +9,19 @@ import (
 type MessageMailbox struct {
 	cap     int
 	emptier Emptier[domain.Message]
-	Stack[domain.Message]
+	stack   Stack[domain.Message]
 }
 
 func NewMessageMailbox(c int, empt Emptier[domain.Message], stack Stack[domain.Message]) *MessageMailbox {
 	return &MessageMailbox{
 		cap:     c,
 		emptier: empt,
-		Stack:   stack,
+		stack:   stack,
 	}
 }
 
 func (q *MessageMailbox) Add(msg domain.Message) {
-	q.Push(msg)
+	q.stack.PushFront(msg)
 }
 
 // Empty drains the queue and puts all found values onto a channel

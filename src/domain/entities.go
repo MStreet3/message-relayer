@@ -27,7 +27,18 @@ the oldest message
 var PriorityQueueCapacity int = 100
 
 type Message struct {
-	Type      MessageType
+	msgType   MessageType
 	Data      []byte
 	Timestamp int64
+}
+
+func NewMessage(t MessageType, d []byte) Message {
+	return Message{
+		msgType: t,
+		Data:    d,
+	}
+}
+
+func (m Message) Type() MessageType {
+	return m.msgType
 }

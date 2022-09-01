@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/mstreet3/message-relayer/domain"
 	"github.com/mstreet3/message-relayer/errs"
@@ -17,21 +18,22 @@ type mailbox[T any] interface {
 }
 
 type messageRelayer struct {
-	om      ObserverManager
+	om      ObserverManager[domain.MessageType, domain.Message]
 	network network.RestartNetworkReader
 	mailbox mailbox[domain.Message]
-	errorCh <-chan error
+	pulse   time.Duration
 }
 
-func NewDefaultMessageRelayer(
+func NewMessageRelayer(
 	n network.RestartNetworkReader,
 	mailbox mailbox[domain.Message],
-	om ObserverManager,
+	om ObserverManager[domain.MessageType, domain.Message],
 ) *messageRelayer {
 	return &messageRelayer{
 		network: n,
 		mailbox: mailbox,
 		om:      om,
+		pulse:   80 * time.Millisecond,
 	}
 }
 
@@ -40,17 +42,15 @@ func (mr *messageRelayer) Start(ctx context.Context) <-chan struct{} {
 		ctxwc, cancel      = context.WithCancel(ctx)
 		terminated         = make(chan struct{})
 		reading, hb, errCh = mr.read(ctxwc)
-		checkingMsgs       = mr.checkMail(ctxwc, hb)
+		monitoring         = mr.monitor(ctxwc, errCh, hb)
 	)
-
-	mr.errorCh = errCh
 
 	go func() {
 		defer close(terminated)
 		defer mr.om.Close()
 		defer cancel()
 		<-reading
-		<-checkingMsgs
+		<-monitoring
 	}()
 
 	return terminated
@@ -60,14 +60,11 @@ func (mr *messageRelayer) Subscribe(mt domain.MessageType) (<-chan domain.Messag
 	return mr.om.Subscribe(context.Background(), mt)
 }
 
-func (mr *messageRelayer) Errors() <-chan error {
-	return mr.errorCh
-}
-
 func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan struct{}, <-chan error) {
 	var (
-		errCh     = make(chan error)
+		ticker    = time.NewTicker(mr.pulse)
 		done      = make(chan struct{})
+		errCh     = make(chan error, 1)
 		hb        = make(chan struct{}, 1)
 		sendPulse = func() {
 			select {
@@ -87,30 +84,22 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 	go func() {
 		defer close(done)
 		defer close(errCh)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-ticker.C:
 				sendPulse()
 
 				msg, err := mr.network.Read()
 				if err != nil {
 					sendErr(err)
-
-					if errors.Is(err, errs.FatalSocketError{}) {
-						utils.DPrintf("%s\n", err.Error())
-
-						if rerr := mr.network.Restart(); rerr != nil {
-							log.Fatal(rerr)
-						}
-					}
-
 					continue
 				}
 
-				utils.DPrintf("placing message of type %s in mailbox\n", msg.Type)
-				mr.mailbox.Add(*msg)
+				mr.sendMail(msg)
 			}
 		}
 	}()
@@ -118,22 +107,10 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 	return done, hb, errCh
 }
 
-func (mr *messageRelayer) checkMail(ctx context.Context, hb <-chan struct{}) <-chan struct{} {
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-hb:
-				_ = mr.relay(ctx, mr.mailbox.Empty(ctx))
-			}
-		}
-	}()
-
-	return done
+func (mr *messageRelayer) sendMail(msg *domain.Message) {
+	utils.DPrintf("placing message of type %s in mailbox\n", msg.Type())
+	msg.Timestamp = time.Now().UTC().UnixNano()
+	mr.mailbox.Add(*msg)
 }
 
 func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {
@@ -150,6 +127,34 @@ func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message
 					return
 				}
 				mr.om.Notify(ctx, msg)
+			}
+		}
+	}()
+
+	return done
+}
+
+func (mr *messageRelayer) monitor(ctx context.Context, errCh <-chan error, hb <-chan struct{}) <-chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hb:
+				_ = mr.relay(ctx, mr.mailbox.Empty(ctx))
+			case err, open := <-errCh:
+				if !open {
+					return
+				}
+				if errors.Is(err, errs.FatalSocketError{}) {
+					utils.DPrintf("%s\n", err.Error())
+					if rerr := mr.network.Restart(); rerr != nil {
+						log.Fatal(rerr)
+					}
+				}
 			}
 		}
 	}()

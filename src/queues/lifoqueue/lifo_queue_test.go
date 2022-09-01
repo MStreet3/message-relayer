@@ -20,7 +20,7 @@ func Test_queue_is_LIFO(t *testing.T) {
 		[]byte("last in"),
 	}
 	for _, msg := range messages {
-		queue.Push(msg)
+		queue.PushFront(msg)
 	}
 	firstOut, _ := queue.Pop()
 	lastOut, _ := queue.Pop()

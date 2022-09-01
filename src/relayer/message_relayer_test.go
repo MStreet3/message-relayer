@@ -2,6 +2,7 @@ package relayer
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/mstreet3/message-relayer/domain"
@@ -12,22 +13,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_DefaultMessageRelayer_RelaysMessages(t *testing.T) {
+var (
+	emptySNR              domain.Message = domain.NewMessage(domain.StartNewRound, nil)
+	emptyRA               domain.Message = domain.NewMessage(domain.ReceivedAnswer, nil)
+	StartNewRoundResponse                = network.NetworkResponse{
+		Message: &emptySNR,
+		Error:   nil,
+	}
+	ReceivedAnswerResponse = network.NetworkResponse{
+		Message: &emptyRA,
+		Error:   nil,
+	}
+	NetworkErrorResponse = network.NetworkResponse{
+		Error: errors.New("network unavailable"),
+	}
+)
+
+func Test_MessageRelayer_RelaysMessages(t *testing.T) {
 	var (
 		ctx, cancel = context.WithCancel(context.Background())
 		responses   = []network.NetworkResponse{
 			StartNewRoundResponse,
+			NetworkErrorResponse,
 			StartNewRoundResponse,
 			ReceivedAnswerResponse,
+			NetworkErrorResponse,
 		}
 		socket = network.NewNetworkSocketStub(responses)
 
 		lifo = lfq.NewLIFOQueue[domain.Message]()
 
-		mr = NewDefaultMessageRelayer(
+		mr = NewMessageRelayer(
 			socket,
 			queue.NewMessageMailbox(1, lifo, lifo),
-			NewObserverManager(),
+			NewMessageObserverManager(),
 		)
 		wantSNR = 6
 		wantRA  = 3
