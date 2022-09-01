@@ -42,7 +42,7 @@ func (mr *messageRelayer) Start(ctx context.Context) <-chan struct{} {
 		ctxwc, cancel      = context.WithCancel(ctx)
 		terminated         = make(chan struct{})
 		reading, hb, errCh = mr.read(ctxwc)
-		monitoring         = mr.monitor(ctxwc, errCh, hb)
+		monitoring         = mr.monitor(ctxwc, hb, errCh)
 	)
 
 	go func() {
@@ -134,7 +134,7 @@ func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message
 	return done
 }
 
-func (mr *messageRelayer) monitor(ctx context.Context, errCh <-chan error, hb <-chan struct{}) <-chan struct{} {
+func (mr *messageRelayer) monitor(ctx context.Context, hb <-chan struct{}, errCh <-chan error) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
