@@ -79,6 +79,11 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 				utils.DPrintf("no error subscribers")
 			}
 		}
+		enqueue = func(msg *domain.Message) {
+			utils.DPrintf("placing message of type %s in mailbox\n", msg.Type())
+			msg.Timestamp = time.Now().UTC().UnixNano()
+			mr.mailbox.Add(*msg)
+		}
 	)
 
 	go func() {
@@ -99,7 +104,7 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 					continue
 				}
 
-				mr.sendMail(msg)
+				enqueue(msg)
 			}
 		}
 	}()
@@ -107,13 +112,35 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 	return done, hb, errCh
 }
 
-func (mr *messageRelayer) sendMail(msg *domain.Message) {
-	utils.DPrintf("placing message of type %s in mailbox\n", msg.Type())
-	msg.Timestamp = time.Now().UTC().UnixNano()
-	mr.mailbox.Add(*msg)
+func (mr *messageRelayer) monitor(ctx context.Context, hb <-chan struct{}, errCh <-chan error) <-chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hb:
+				<-mr.notify(ctx, mr.mailbox.Empty(ctx))
+			case err, open := <-errCh:
+				if !open {
+					return
+				}
+				if errors.Is(err, errs.FatalSocketError{}) {
+					utils.DPrintf("%s\n", err.Error())
+					if rerr := mr.network.Restart(); rerr != nil {
+						log.Fatal(rerr)
+					}
+				}
+			}
+		}
+	}()
+
+	return done
 }
 
-func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {
+func (mr *messageRelayer) notify(ctx context.Context, msgCh <-chan domain.Message) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
@@ -127,34 +154,6 @@ func (mr *messageRelayer) relay(ctx context.Context, msgCh <-chan domain.Message
 					return
 				}
 				mr.om.Notify(ctx, msg)
-			}
-		}
-	}()
-
-	return done
-}
-
-func (mr *messageRelayer) monitor(ctx context.Context, hb <-chan struct{}, errCh <-chan error) <-chan struct{} {
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-hb:
-				_ = mr.relay(ctx, mr.mailbox.Empty(ctx))
-			case err, open := <-errCh:
-				if !open {
-					return
-				}
-				if errors.Is(err, errs.FatalSocketError{}) {
-					utils.DPrintf("%s\n", err.Error())
-					if rerr := mr.network.Restart(); rerr != nil {
-						log.Fatal(rerr)
-					}
-				}
 			}
 		}
 	}()
