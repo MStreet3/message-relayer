@@ -1,7 +1,5 @@
 package domain
 
-import "time"
-
 type MessageType int
 
 const (
@@ -20,13 +18,27 @@ func (m MessageType) String() string {
 	}
 }
 
-/* number of messages held in memory for each
+/*
+	number of messages held in memory for each
+
 message type.  additional messages are added by dropping
-the oldest message */
+the oldest message
+*/
 var PriorityQueueCapacity int = 100
 
 type Message struct {
-	Type      MessageType
+	msgType   MessageType
 	Data      []byte
-	Timestamp time.Time
+	Timestamp int64
+}
+
+func NewMessage(t MessageType, d []byte) Message {
+	return Message{
+		msgType: t,
+		Data:    d,
+	}
+}
+
+func (m Message) Type() MessageType {
+	return m.msgType
 }

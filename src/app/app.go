@@ -10,9 +10,8 @@ import (
 )
 
 type Application struct {
-	network  network.RestartNetworkReader
-	relayer  relayer.MessageRelayer
-	services []<-chan struct{}
+	network network.RestartNetworkReader
+	relayer relayer.MessageRelayer
 }
 
 func NewApplication(
@@ -20,9 +19,8 @@ func NewApplication(
 	r relayer.MessageRelayer,
 ) *Application {
 	return &Application{
-		network:  n,
-		relayer:  r,
-		services: make([]<-chan struct{}, 0),
+		network: n,
+		relayer: r,
 	}
 }
 
@@ -61,7 +59,7 @@ func (app *Application) Start(ctx context.Context) <-chan struct{} {
 func (app *Application) listen(ctx context.Context, n int, mt domain.MessageType) <-chan struct{} {
 	var (
 		l, cleanup = app.relayer.Subscribe(mt)
-		taking     = utils.Take(ctx.Done(), l, n)
+		taking     = utils.ReadN(ctx.Done(), l, n)
 		done       = make(chan struct{})
 	)
 

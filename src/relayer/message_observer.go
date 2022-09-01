@@ -5,12 +5,10 @@ import (
 	"github.com/mstreet3/message-relayer/domain"
 )
 
-type Observer[T interface{}] interface {
-	Observe(T) error
-}
-
 type MessageObserver Observer[domain.Message]
+
 type MessageHandler func(domain.Message) error
+
 type messageObserver struct {
 	ID     uuid.UUID
 	handle MessageHandler

@@ -5,33 +5,43 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/mstreet3/message-relayer/app"
 	"github.com/mstreet3/message-relayer/domain"
+	"github.com/mstreet3/message-relayer/mailbox"
 	"github.com/mstreet3/message-relayer/network"
+	lifo "github.com/mstreet3/message-relayer/queues/lifoqueue"
 	"github.com/mstreet3/message-relayer/relayer"
 	"github.com/mstreet3/message-relayer/utils"
 )
 
+var emptySNR domain.Message = domain.NewMessage(domain.StartNewRound, nil)
+var emptyRA domain.Message = domain.NewMessage(domain.ReceivedAnswer, nil)
+
+var StartNewRoundResponse = network.NetworkResponse{
+	Message: &emptySNR,
+	Error:   nil,
+}
+var ReceivedAnswerResponse = network.NetworkResponse{
+	Message: &emptyRA,
+	Error:   nil,
+}
+
 var responses = []network.NetworkResponse{
-	{
-		Message: &domain.Message{
-			Type: domain.ReceivedAnswer,
-		},
-	},
-	{
-		Message: &domain.Message{
-			Type: domain.StartNewRound,
-		},
-	},
+	StartNewRoundResponse,
+	ReceivedAnswerResponse,
 }
 
 func main() {
 	var (
-		ctxWithCancel, cancel = context.WithCancel(context.Background())
-		ns                    = network.NewNetworkSocketStub(responses)
-		mr                    = relayer.NewDefaultMessageRelayer(ns)
-		interrupt             = make(chan os.Signal, 1)
+		ctxWithTimeout, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		ns                     = network.NewNetworkSocketStub(responses)
+		om                     = relayer.NewMessageObserverManager()
+		stack                  = lifo.NewLIFOQueue[domain.Message]()
+		mailbox                = mailbox.NewMessageMailbox(1, stack, stack)
+		mr                     = relayer.NewMessageRelayer(ns, mailbox, om)
+		interrupt              = make(chan os.Signal, 1)
 	)
 
 	// Notify main of any interruptions
@@ -40,7 +50,7 @@ func main() {
 	application := app.NewApplication(ns, mr)
 
 	utils.DPrintf("starting the app")
-	stopped := application.Start(ctxWithCancel)
+	stopped := application.Start(ctxWithTimeout)
 
 	// Handle graceful shutdown
 	for {

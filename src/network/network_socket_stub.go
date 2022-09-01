@@ -1,6 +1,7 @@
 package network
 
 import (
+	"sync"
 	"time"
 
 	"github.com/mstreet3/message-relayer/domain"
@@ -13,15 +14,18 @@ type NetworkResponse struct {
 }
 
 type NetworkSocketStub struct {
+	mu        sync.Mutex
 	Cursor    int
 	Responses []NetworkResponse
 }
 
 func (n *NetworkSocketStub) Read() (*domain.Message, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.Cursor < len(n.Responses) {
 		<-time.After(30 * time.Millisecond)
 		response := n.Responses[n.Cursor]
-		response.Message.Timestamp = time.Now()
 		n.Cursor++
 		return response.Message, response.Error
 	}
@@ -29,6 +33,9 @@ func (n *NetworkSocketStub) Read() (*domain.Message, error) {
 }
 
 func (n *NetworkSocketStub) Restart() error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.Cursor = 0
 	return nil
 }
