@@ -36,10 +36,15 @@ func TestMessageMailbox(t *testing.T) {
 		helper  func(t *testing.T, m *MessageMailbox)
 	}{
 		{
-			name: "adds messages and drops oldest when at capacity",
+			name: "successfully adds messages and drops oldest messsage when at capacity",
 			mailbox: func() *MessageMailbox {
 				stack := lifoqueue.NewLIFOQueue[domain.Message]()
-				mailbox := NewMessageMailbox(1, stack, stack)
+				mailbox := &MessageMailbox{
+					cap:         1,
+					stack:       stack,
+					emptier:     stack,
+					timestamper: &testTimeStamper{},
+				}
 				return mailbox
 			}(),
 			helper: testMessageMailbox_Add,
@@ -115,7 +120,7 @@ func testMessageMailbox_Empty(t *testing.T, mailbox *MessageMailbox) {
 
 	gotMsg, open := <-mailbox.Empty(ctx)
 	require.Equal(t, domain.Message{}, gotMsg)
-	require.False(t, open)
+	require.True(t, !open)
 }
 
 func testMessageMailbox_EmptiedAt(t *testing.T, mailbox *MessageMailbox) {
