@@ -28,6 +28,17 @@ func (q *LIFOQueue[T]) PushFront(msg T) {
 	q.queue.PushFront(&msg)
 }
 
+func (q *LIFOQueue[T]) PopBack() (*T, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if e := q.queue.Back(); e != nil {
+		q.queue.Remove(e)
+		return e.Value.(*T), true
+	}
+	return nil, false
+}
+
 func (q *LIFOQueue[T]) Pop() (*T, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
