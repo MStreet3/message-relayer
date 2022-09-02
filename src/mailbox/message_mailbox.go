@@ -9,11 +9,12 @@ import (
 )
 
 type MessageMailbox struct {
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	cap         int
 	stack       Stack[domain.Message]
 	emptier     Emptier[domain.Message]
 	timestamper TimeStamper
+	emptiedAt   int64
 }
 
 func NewMessageMailbox(
@@ -22,7 +23,7 @@ func NewMessageMailbox(
 	stack Stack[domain.Message],
 ) *MessageMailbox {
 	return &MessageMailbox{
-		mu:      sync.Mutex{},
+		mu:      sync.RWMutex{},
 		cap:     c,
 		emptier: empt,
 		stack:   stack,
@@ -69,18 +70,30 @@ func (q *MessageMailbox) Empty(ctx context.Context) <-chan domain.Message {
 }
 
 func (q *MessageMailbox) EmptiedAt() int64 {
-	return q.getTimestamper().GetTimestamp()
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.emptiedAt
 }
 
 func (q *MessageMailbox) empty() []domain.Message {
-	q.getTimestamper().SetTimestamp()
-	return q.emptier.Empty()
+	msgs := q.emptier.Empty()
+	q.setEmptiedAt()
+	return msgs
+}
+
+func (q *MessageMailbox) setEmptiedAt() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.emptiedAt = q.getTimestamper().Timestamp()
+}
+
+func (q *MessageMailbox) Postmark(msg *domain.Message) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	msg.Timestamp = q.getTimestamper().Timestamp()
 }
 
 func (q *MessageMailbox) getTimestamper() TimeStamper {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
 	if q.timestamper == nil {
 		q.timestamper = NewTimeStamper()
 	}

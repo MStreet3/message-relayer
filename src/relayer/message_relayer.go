@@ -12,21 +12,42 @@ import (
 	"github.com/mstreet3/message-relayer/utils"
 )
 
-type mailbox[T any] interface {
+type Event[T ~int] interface {
+	Type() T
+}
+
+type Subscriber[T ~int, U Event[T]] interface {
+	Subscribe(T) (<-chan U, func())
+}
+
+type MessageRelayer interface {
+	Subscriber[domain.MessageType, domain.Message]
+	Start(context.Context) <-chan struct{}
+}
+
+type Mailbox[T any] interface {
 	Add(T)
 	Empty(context.Context) <-chan T
+}
+
+type Timed interface {
+	SetTimestamp(int64)
+}
+
+type Postmarker[T Timed] interface {
+	Postmark(*T)
 }
 
 type messageRelayer struct {
 	om      ObserverManager[domain.MessageType, domain.Message]
 	network network.RestartNetworkReader
-	mailbox mailbox[domain.Message]
+	mailbox Mailbox[domain.Message]
 	pulse   time.Duration
 }
 
 func NewMessageRelayer(
 	n network.RestartNetworkReader,
-	mailbox mailbox[domain.Message],
+	mailbox Mailbox[domain.Message],
 	om ObserverManager[domain.MessageType, domain.Message],
 ) *messageRelayer {
 	return &messageRelayer{
@@ -128,7 +149,7 @@ func (mr *messageRelayer) monitor(ctx context.Context, hb <-chan struct{}, errCh
 					return
 				}
 				if errors.Is(err, errs.FatalSocketError{}) {
-					utils.DPrintf("%s\n", err.Error())
+					utils.DPrintf("%s - restarting network\n", err.Error())
 					if rerr := mr.network.Restart(); rerr != nil {
 						log.Fatal(rerr)
 					}

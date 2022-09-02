@@ -3,6 +3,7 @@ package mailbox
 import "context"
 
 type Mailbox[T any] interface {
+	Postmark(*T)
 	Add(T)
 	Empty(context.Context) <-chan T
 	EmptiedAt() int64
@@ -20,6 +21,5 @@ type Stack[T any] interface {
 }
 
 type TimeStamper interface {
-	GetTimestamp() int64
-	SetTimestamp()
+	Timestamp() int64
 }

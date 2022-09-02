@@ -15,18 +15,11 @@ type testTimeStamper struct {
 	ts int64
 }
 
-func (ts *testTimeStamper) GetTimestamp() int64 {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-
-	return ts.ts
-}
-
-func (ts *testTimeStamper) SetTimestamp() {
+func (ts *testTimeStamper) Timestamp() int64 {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-
 	ts.ts++
+	return ts.ts
 }
 
 func TestMessageMailbox(t *testing.T) {

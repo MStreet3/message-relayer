@@ -13,12 +13,8 @@ type Observer[T any] interface {
 	Observe(T) error
 }
 
-type Event[T ~int] interface {
-	Type() T
-}
-
-type ObserverManager[Type ~int, E Event[Type]] interface {
-	Subscribe(ctx context.Context, t Type) (<-chan E, func())
+type ObserverManager[T ~int, E Event[T]] interface {
+	Subscribe(ctx context.Context, t T) (<-chan E, func())
 	Notify(ctx context.Context, evt E)
 	Close()
 }

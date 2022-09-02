@@ -41,11 +41,12 @@ func Test_MessageRelayer_RelaysMessages(t *testing.T) {
 		}
 		socket = network.NewNetworkSocketStub(responses)
 
-		lifo = lfq.NewLIFOQueue[domain.Message]()
+		lifo    = lfq.NewLIFOQueue[domain.Message]()
+		mailbox = queue.NewMessageMailbox(1, lifo, lifo)
 
 		mr = NewMessageRelayer(
 			socket,
-			queue.NewMessageMailbox(1, lifo, lifo),
+			mailbox,
 			NewMessageObserverManager(),
 		)
 		wantSNR = 6
