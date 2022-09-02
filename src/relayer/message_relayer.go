@@ -100,7 +100,7 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 				utils.DPrintf("no error subscribers")
 			}
 		}
-		enqueue = func(msg *domain.Message) {
+		sendMsg = func(msg *domain.Message) {
 			utils.DPrintf("placing message of type %s in mailbox\n", msg.Type())
 			msg.Timestamp = time.Now().UTC().UnixNano()
 			mr.mailbox.Add(*msg)
@@ -125,7 +125,7 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 					continue
 				}
 
-				enqueue(msg)
+				sendMsg(msg)
 			}
 		}
 	}()
