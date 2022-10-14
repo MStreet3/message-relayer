@@ -18,7 +18,7 @@ type mailbox[T any] interface {
 }
 
 type messageRelayer struct {
-	om      ObserverManager[domain.MessageType, domain.Message]
+	om      MessageObserverManager
 	network network.RestartNetworkReader
 	mailbox mailbox[domain.Message]
 	pulse   time.Duration
@@ -27,7 +27,7 @@ type messageRelayer struct {
 func NewMessageRelayer(
 	n network.RestartNetworkReader,
 	mailbox mailbox[domain.Message],
-	om ObserverManager[domain.MessageType, domain.Message],
+	om MessageObserverManager,
 ) *messageRelayer {
 	return &messageRelayer{
 		network: n,
@@ -96,8 +96,6 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				sendPulse()
-
 				msg, err := mr.network.Read()
 				if err != nil {
 					sendErr(err)
@@ -105,6 +103,8 @@ func (mr *messageRelayer) read(ctx context.Context) (<-chan struct{}, <-chan str
 				}
 
 				enqueue(msg)
+
+				sendPulse()
 			}
 		}
 	}()
