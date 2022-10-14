@@ -12,11 +12,11 @@ type MessageMailbox struct {
 	stack   Stack[domain.Message]
 }
 
-func NewMessageMailbox(c int, empt Emptier[domain.Message], stack Stack[domain.Message]) *MessageMailbox {
+func NewMessageMailbox(c int, empt StackEmptier[domain.Message]) *MessageMailbox {
 	return &MessageMailbox{
 		cap:     c,
 		emptier: empt,
-		stack:   stack,
+		stack:   empt,
 	}
 }
 

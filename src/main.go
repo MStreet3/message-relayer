@@ -39,7 +39,7 @@ func main() {
 		ns                     = network.NewNetworkSocketStub(responses)
 		om                     = relayer.NewMessageObserverManager()
 		stack                  = lifo.NewLIFOQueue[domain.Message]()
-		mailbox                = mailbox.NewMessageMailbox(1, stack, stack)
+		mailbox                = mailbox.NewMessageMailbox(1, stack)
 		mr                     = relayer.NewMessageRelayer(ns, mailbox, om)
 		interrupt              = make(chan os.Signal, 1)
 	)
