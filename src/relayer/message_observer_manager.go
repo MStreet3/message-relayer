@@ -23,16 +23,20 @@ type ObserverManager[Type ~int, E Event[Type]] interface {
 	Close()
 }
 
+type MessageObserverManager ObserverManager[domain.MessageType, domain.Message]
+
+var _ MessageObserverManager = (*msgObserverManager)(nil)
+
 type msgObserverManager struct {
 	subscribers map[domain.MessageType]map[string]MessageObserver
 	stopCh      chan struct{}
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	wg          sync.WaitGroup
 }
 
 func NewMessageObserverManager() *msgObserverManager {
 	return &msgObserverManager{
-		mu:          sync.Mutex{},
+		mu:          sync.RWMutex{},
 		wg:          sync.WaitGroup{},
 		stopCh:      make(chan struct{}),
 		subscribers: make(map[domain.MessageType]map[string]MessageObserver),
@@ -85,8 +89,8 @@ func (mom *msgObserverManager) Subscribe(ctx context.Context, mt domain.MessageT
 }
 
 func (mom *msgObserverManager) Notify(ctx context.Context, msg domain.Message) {
-	mom.mu.Lock()
-	defer mom.mu.Unlock()
+	mom.mu.RLock()
+	defer mom.mu.RUnlock()
 
 	stop := utils.CtxOrDone(ctx, mom.stopCh)
 	msgType := msg.Type()
