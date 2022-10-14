@@ -16,3 +16,8 @@ type Stack[T any] interface {
 	Pop() (*T, bool) // remove top item from stack
 	PushFront(T)     // place item on top of stack
 }
+
+type StackEmptier[T any] interface {
+	Stack[T]
+	Emptier[T]
+}

@@ -45,7 +45,7 @@ func Test_MessageRelayer_RelaysMessages(t *testing.T) {
 
 		mr = NewMessageRelayer(
 			socket,
-			queue.NewMessageMailbox(1, lifo, lifo),
+			queue.NewMessageMailbox(1, lifo),
 			NewMessageObserverManager(),
 		)
 		wantSNR = 6
